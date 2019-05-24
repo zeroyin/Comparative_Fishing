@@ -5,6 +5,10 @@
 rm(list = ls())
 setwd("C:/Users/yinyi/Dropbox/BIO/Comparative_Fishing/Workspace/test_size_gam/")
 
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
 load("data-NED2016.RData")
 
 # -----------------------------------------
