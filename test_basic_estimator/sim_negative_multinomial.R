@@ -1,19 +1,18 @@
-# #################################
-# Test negative binomial
+# #######################################
+# Test negative binomial estimator
 # simulation in R and estimation using TMB
-# #################################
-
+# #######################################
 
 rm(list = ls())
-setwd("C:/Users/yinyi/Dropbox/BIO/Workspace/test")
+setwd("C:/Users/yinyi/Dropbox/BIO/Comparative_Fishing/Workspace/test_basic_estimator/")
 
 # ### Data simulation
 
 # number of stations
-n_i <- 50
+n_i <- 100
 
 # density at location i
-r <- 5 # measure of dispersion: small r causes convergence issues
+r <- 10 # measure of dispersion: small r causes convergence issues
 d <- 5 # density mean
 dens <- rgamma(n = n_i, shape = r, scale = d/r)
 
@@ -28,6 +27,7 @@ mu_B <- q_B * dens
 n_A <- rpois(n_i, mu_A)
 n_B <- rpois(n_i, mu_B)
 
+# plot data
 plot(1:n_i, n_A, ylim = range(c(n_A, n_B)))
 points(1:n_i, n_B, col = "red", pch = 2)
 
@@ -36,47 +36,49 @@ points(1:n_i, n_B, col = "red", pch = 2)
 
 # ### Fit model
 
-
-# # ### fit a negative multinomial model
+# --------------------------------------
+# ### fit a negative multinomial model
 # small r and small n_i causes convergence issues
-# 
-# library(TMB)
-# 
-# data = list(
-#   n_A = n_A,
-#   n_B = n_B)
-# parameters = list(
-#   log_d = 0,
-#   log_r = 0,
-#   log_dens = rep(0, n_i),
-#   log_q_A = 0,
-#   log_q_B = 0)
-# 
-# version <- "negative_multinomial"
-# compile(paste0(version,".cpp"))
-# dyn.load(dynlib(version))
-# obj = MakeADFun(data=data, 
-#                 parameters=parameters,
-#                 map=list("log_q_A" = factor(NA)),
-#                 random=c("log_dens"),
-#                 DLL=version,
-#                 silent = F)
-# opt <- nlminb(obj$par,obj$fn,obj$gr)
-# rep <- sdreport(obj)
-# 
-# c(rep$value, rep$sd)
-# 
-# 
-# plot(exp(rep$par.random), dens)
-# abline(0, 1, col = "red")
+# consistent bias in estimated rho possibly due to data simulation non-agreement
+
+library(TMB)
+
+data = list(
+  n_A = n_A,
+  n_B = n_B)
+parameters = list(
+  log_d = 0,
+  log_r = 0,
+  log_dens = rep(0, n_i),
+  log_q_A = 0,
+  log_q_B = 0)
+
+version <- "negative_multinomial"
+compile(paste0(version,".cpp"))
+dyn.load(dynlib(version))
+obj = MakeADFun(data=data,
+                parameters=parameters,
+                map=list("log_q_A" = factor(NA)),
+                random=c("log_dens"),
+                DLL=version,
+                silent = F)
+opt <- nlminb(obj$par,obj$fn,obj$gr)
+rep <- sdreport(obj)
+
+c(rep$value, rep$sd)
 
 
+# plot results
+plot(exp(rep$par.random), dens)
+abline(0, 1, col = "red")
 
+
+# --------------------------------------
 # ### fit a beta negative multinomial model
 # only converges with an upper limit on beta distn parameters
 # because alpha, beta -> Inf
 # try different parameterization?
-# algorithm very sensitive to numbers
+# algorithm very sensitive to data
 
 library(TMB)
 
