@@ -19,32 +19,58 @@ i.species <- 11
 
 d <- d.length %>% 
     filter(species == i.species) %>%
-    transmute(station, gear, len, c) %>%
-    spread(gear, c, fill = 0) %>%
-    # mutate(len = (floor(len/10))) %>% # length grouping
-    group_by(len) %>% 
-    summarise(A = (sum(`9`)), B = (sum(`15`)))%>%
-    mutate(N = A+B) %>%
-    complete(len = full_seq(len, 1), fill = list(A=0,B=0,N=0)) %>%
-    print(n=Inf)
+    transmute(
+        station = factor(station),
+        gear = factor(gear), 
+        len = (floor(len/5)), # length grouping
+        catch = c) %>%
+    group_by(station, gear, len) %>%
+    summarise(catch = sum(catch)) %>%
+    ungroup() %>%
+    complete(len = full_seq(len, 1), station, gear, fill = list(catch = 0))
 
-# basic functions
 
-library(splines)
-x <- splineDesign(knots = d$len, x = 1:100, outer.ok = T)
+# basis abd penalty matrices for cubic spline
+# over length bins
+library(mgcv)
+cs <- smooth.construct(
+    object = s(len, bs = "cr"), 
+    data = d %>% group_by(len) %>% summarise(catch = sum()), 
+    knots = NULL)
 
-plot(x[,5])
+# default to 10 knots resulting in 2 fixed and 8 random effects
+n_f <- 2
+n_r <- 8
+eigende <- eigen(cs$S[[1]])
 
 # input for TMB
-nlam = 3
-nlen = dim(d)[1]
-data = list(n_A = d$A,
-            n_B = d$B,
-            X = matrix(1, nlen, nlam),
-            Xd = matrix(1, nlen, nlam))
-parameters = list(beta = rep(1, nlam),
-                  betad = rep(1, nlam))
+nlen = nlevels(as.factor(d$len))
+nstation = nlevels(d$station)
 
+data = list(
+    A = d %>% filter(gear == 9 ) %>% spread(len, catch) %>% select(-station, -gear) %>% as.matrix(),
+    B = d %>% filter(gear == 15) %>% spread(len, catch) %>% select(-station, -gear) %>% as.matrix(),
+    Xf = cs$X %*% eigende$vectors[,1:n_f+n_r],
+    Xr = cs$X %*% eigende$vectors[,1:n_r],
+    d = eigende$value[1:n_r]
+)
+parameters = list(
+    beta = rep(0, n_f),
+    b = rep(0, n_r),
+    gamma = rep(0, n_f),
+    g = rep(0, n_r),
+    delta = matrix(0, nstation, n_f),
+    epsilon = matrix(0, nstation, n_r),
+    log_s_b = log(1),
+    log_s_g = log(1),
+    log_s_epsilon = log(1),
+    C_delta = diag(1,2)
+)
+map <- list(
+    log_s_b = factor(NA),
+    log_s_g = factor(NA),
+    log_s_epsilon = factor(NA)
+)
 
 # run TMB model
 library(TMB)
@@ -53,7 +79,9 @@ compile(paste0(version,".cpp"))
 dyn.load(dynlib(version))
 obj = MakeADFun(data=data,
                 parameters=parameters,
+                # map = map,
                 DLL=version,
+                random = c("delta", "epsilon"),
                 silent = F)
 opt <- nlminb(obj$par,obj$fn,obj$gr)
 rep <- sdreport(obj)
