@@ -1,4 +1,4 @@
-// test nagative multinomial model
+// test betabinomial model, length GAM, with random effects
 
 #include <TMB.hpp>
 
@@ -47,18 +47,21 @@ Type objective_function<Type>::operator() () {
 	PARAMETER(log_s_epsilon); // smooth term for epsilon
 	PARAMETER_MATRIX(C_delta); // Covariance matrix for delta
 
+
 	// transformation
+	const int n_len = A.cols(); // number of length bins
+	const int n_s = A.rows(); // number of stations
+	const int n_f = beta.size();
+	const int n_r = b.size();
+
 	matrix<Type> N = A + B; // total catch
+
 	Type s_b = exp(log_s_b); // smooth term for b
 	Type s_g = exp(log_s_g); // smooth term for g
 	Type s_epsilon = exp(log_s_epsilon); // smooth term for epsilon
 
 
 	// set up objective fn 
-	const int n_len = A.cols(); // number of length bins
-	const int n_s = A.rows(); // number of stations
-	const int n_f = beta.size();
-	const int n_r = b.size();
 	vector<Type> nll(5); nll.setZero(); // initialize negative log likelihood
 
 	// random effects with smooth penalty
@@ -78,6 +81,7 @@ Type objective_function<Type>::operator() () {
 	// Observation likelihood
 	matrix<Type> mu(n_s, n_len);
 	matrix<Type> phi(n_s, n_len);
+	matrix<Type> rho(n_s, n_len);
 	for(int i_s = 0; i_s < n_s; i_s++){
 		for(int i_len = 0; i_len < n_len; i_len++){
 			// linear predictors
@@ -95,6 +99,10 @@ Type objective_function<Type>::operator() () {
 			mu(i_s, i_len) = invlogit(eta_mu);
 			phi(i_s, i_len) = exp(eta_phi);
 
+			// conversion rate derived from proportion
+			rho(i_s, i_len) = mu(i_s, i_len)/(Type(1)-mu(i_s, i_len));
+
+			// transformation to shape parameter
 	        Type s1 = mu(i_s, i_len)*phi(i_s, i_len); // s1 = mu(i) * mu(i) / phi(i);
 	        Type s2 = (Type(1)-mu(i_s, i_len))*phi(i_s, i_len); // phi(i) / mu(i);
 
@@ -104,9 +112,25 @@ Type objective_function<Type>::operator() () {
 
 
 
+	// derived quantities  
+	vector<Type> mean_mu = mu.colwise().sum()/mu.rows(); // column means
+	ADREPORT(mean_mu);
+	vector<Type> mean_phi = phi.colwise().sum()/phi.rows(); // column means
+	ADREPORT(mean_phi);
+	vector<Type> mean_rho = rho.colwise().sum()/rho.rows();
+	ADREPORT(mean_rho);
+	vector<Type> mean_rho_2 = mean_mu/(Type(1)-mean_mu);
+	ADREPORT(mean_rho_2);
+
+	// sdreport
+	ADREPORT(mu);
+	ADREPORT(phi);
+	ADREPORT(rho);
+
 	// report
 	REPORT(mu);
 	REPORT(phi);
+	REPORT(rho);
 	REPORT(beta);
 	REPORT(b);
 	REPORT(gamma);
@@ -115,14 +139,6 @@ Type objective_function<Type>::operator() () {
 	REPORT(epsilon);
 
 
-	// derived quantities  
-	// vector<Type> rho = mu/(1-mu);
-	// REPORT(rho);
-
-	// sdreport
-	// ADREPORT(mu);
-	// ADREPORT(rho);
-	
 	Type jnll = nll.sum();
 	
 	REPORT(nll);
