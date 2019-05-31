@@ -45,8 +45,7 @@ Type objective_function<Type>::operator() () {
 	PARAMETER(log_s_b); // smooth term for b
 	PARAMETER(log_s_g); // smooth term for g
 	PARAMETER(log_s_epsilon); // smooth term for epsilon
-	PARAMETER_MATRIX(C_delta); // Covariance matrix for delta
-
+	PARAMETER_VECTOR(chol_delta); // chol decomposition and vectorized cov matrix for delta
 
 	// transformation
 	const int n_len = A.cols(); // number of length bins
@@ -59,6 +58,18 @@ Type objective_function<Type>::operator() () {
 	Type s_b = exp(log_s_b); // smooth term for b
 	Type s_g = exp(log_s_g); // smooth term for g
 	Type s_epsilon = exp(log_s_epsilon); // smooth term for epsilon
+
+	// Covariance matrix for delta
+	matrix<Type> L_delta(n_f,n_f); L_delta.setZero(); 
+	int k_f = 0;
+	for(int i_f = 0; i_f < n_f; i_f++){
+		for(int j_f = 0; j_f <= i_f; j_f++){
+			L_delta(i_f, j_f) = chol_delta(k_f);
+			k_f++;
+		}
+	}
+	matrix<Type> C_delta(n_f,n_f); 
+	C_delta = L_delta * L_delta.transpose();
 
 
 	// set up objective fn 
@@ -137,12 +148,15 @@ Type objective_function<Type>::operator() () {
 	REPORT(g);
 	REPORT(delta);
 	REPORT(epsilon);
+	REPORT(C_delta);
 
 
 	Type jnll = nll.sum();
 	
 	REPORT(nll);
 	REPORT(jnll);
+
+	// nll(1) = Type(0);
 
 	return jnll;
 }

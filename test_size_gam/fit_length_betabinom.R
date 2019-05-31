@@ -22,7 +22,7 @@ d <- d.length %>%
     filter(species == i.species) %>%
     transmute(station, gear, len, c) %>%
     spread(gear, c, fill = 0) %>%
-    # mutate(len = (floor(len/10))) %>% # length grouping
+    mutate(len = (floor(len/5))) %>% # length grouping
     group_by(len) %>% 
     summarise(A = (sum(`9`)), B = (sum(`15`)))%>%
     mutate(N = A+B) %>%
@@ -42,7 +42,7 @@ library(gamlss)
 rm("fit")
 fit <- gamlss(
     formula = cbind(A, B) ~ cs(len),
-    sigma.formula = ~ len,
+    sigma.formula = ~ 1,
     family = BB(mu.link = "logit", sigma.link = "log"),
     data = d)
 
@@ -52,13 +52,15 @@ summary(fit)
 # -----------------------------------------
 # results plot
 
-jpeg(filename = paste("beta-binom/fitted species", i.species, ".jpg"), units = "in", res = 200, width = 4, height = 6)
+jpeg(filename = paste0("beta-binom/estimates_species-", i.species, ".jpg"), 
+     units = "in", res = 200, width = 4, height = 6)
 fittedPlot(fit, x = d$len)
 dev.off()
 
 
 # Proportion of A
-jpeg(filename = paste("beta-binom/fit with CI95(fast simu) species", i.species, ".jpg"), units = "in", res = 200, width = 6, height = 5)
+jpeg(filename = paste0("beta-binom/mu_CI95(fast_simu)_species-", i.species, ".jpg"),
+     units = "in", res = 200, width = 6, height = 5)
 plot(d$len, d$A/d$N, ylim = c(0, 1), ylab = "Prop. of Gear 9")
 lines(d$len, fit$mu.fv)
 # computation of CI is based on simulation of estimated BB dist
@@ -69,7 +71,8 @@ lines(d$len, qBB(0.95, mu = fit$mu.fv, sigma = fit$sigma.fv, bd = 1000)/1000, co
 dev.off()
 
 # conversion factor: rho
-jpeg(filename = paste("beta-binom/rho with CI95(fast simu) species", i.species, ".jpg"), units = "in", res = 200, width = 6, height = 5)
+jpeg(filename = paste0("beta-binom/rho_CI95(fast_simu)_species-", i.species, ".jpg"),
+     units = "in", res = 200, width = 6, height = 5)
 plot(d$len, d$A/d$B, ylab = "rho: Gear 9 / Gear 15")
 lines(d$len, fit$mu.fv/(1-fit$mu.fv))
 abline(a = 1, b = 0)
