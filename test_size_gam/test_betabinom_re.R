@@ -67,7 +67,7 @@ data = list(
     B = d %>% filter(gear == 15) %>% spread(len, catch) %>% select(-station, -gear) %>% as.matrix(),
     Xf = cs$X %*% eigende$vectors[,1:n_f+n_r],
     Xr = cs$X %*% eigende$vectors[,1:n_r],
-    d = 1/eigende$value[1:n_r]
+    d = eigende$value[1:n_r]
 )
 parameters = list(
     beta = rep(0, n_f),
