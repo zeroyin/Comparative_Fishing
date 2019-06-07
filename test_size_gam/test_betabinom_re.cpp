@@ -29,6 +29,7 @@ Type objective_function<Type>::operator() () {
 	using namespace density;
 	
 	// data:
+	// filter out zeros?
 	DATA_MATRIX(A); // catch number by A, by station by length
 	DATA_MATRIX(B); // catch number by B, by station by length
 	DATA_MATRIX(offset); // offset, validation with Millar's model: offset for zero obs is not zero
@@ -118,7 +119,6 @@ Type objective_function<Type>::operator() () {
 	        Type s1 = mu(i_s, i_len)*phi(i_s, i_len); // s1 = mu(i) * mu(i) / phi(i);
 	        Type s2 = (Type(1)-mu(i_s, i_len))*phi(i_s, i_len); // phi(i) / mu(i);
 
-	        // filter out zeros?
 			nll(4) -= dbetabinom(A(i_s, i_len), s1, s2, N(i_s, i_len), true);
 		}
 	}
