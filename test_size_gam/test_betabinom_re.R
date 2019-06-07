@@ -16,7 +16,7 @@ load("data-NED2016.RData")
 # organize data for model
 
 i.species <- 11
-b.len <- 5
+b.len <- 1
 
 d <- d.length %>% 
     filter(species == i.species) %>%
@@ -39,6 +39,13 @@ d <- d.length %>%
 lenseq <- unique(d$len)
 
 
+# data for offset: same within a tow
+# use zeros as this data is tow-standardized
+d.offset <- d %>% 
+    distinct(station) %>%
+    mutate(offset = 0)
+
+
 # basis and penalty matrices for cubic spline
 # over length bins
 # location of knots might influence smooth functions (and convergence)
@@ -50,10 +57,10 @@ cs <- smooth.construct(
     knots = NULL
 )
 
-cs <- smooth.construct(
-    object = s(len, bs = "cr", k = 6),
-    data = d %>% group_by(len) %>% summarise(catch = sum()),
-    knots =  list(len = seq(min(lenseq),max(lenseq),length.out = 6)))
+# cs <- smooth.construct(
+#     object = s(len, bs = "cr", k = 6),
+#     data = d %>% group_by(len) %>% summarise(catch = sum()),
+#     knots =  list(len = seq(min(lenseq),max(lenseq),length.out = 6)))
 
 n_f <- 2
 n_r <- cs$df - n_f
@@ -66,6 +73,7 @@ nstation = nlevels(d$station)
 data = list(
     A = d %>% filter(gear == 9 ) %>% spread(len, catch) %>% select(-station, -gear) %>% as.matrix(),
     B = d %>% filter(gear == 15) %>% spread(len, catch) %>% select(-station, -gear) %>% as.matrix(),
+    offset = outer(d.offset$offset,rep(1,length(lenseq))),
     Xf = cs$X %*% eigende$vectors[,1:n_f+n_r],
     Xr = cs$X %*% eigende$vectors[,1:n_r],
     d = eigende$value[1:n_r]

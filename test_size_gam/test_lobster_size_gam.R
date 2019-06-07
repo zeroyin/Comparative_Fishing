@@ -1,6 +1,7 @@
 # #############################################
 # Test the models on the lobster data from Adam
 # #############################################
+
 rm(list = ls())
 setwd("C:/Users/yinyi/Dropbox/BIO/Comparative_Fishing/Workspace/test_size_gam")
 
@@ -55,6 +56,7 @@ data %>%
   geom_line(aes(len, total.catch, color = vessel)) +
   theme_bw()
 ggsave("lobster/total_paired_catch_length.jpg", width = 8, height = 6)
+
 
 
 # ------------------------------------------------
@@ -149,7 +151,6 @@ dev.off()
 
 
 
-
 # ------------------------------------------------
 # beta-binomial model with random effects
 rm(list = ls())
@@ -179,6 +180,11 @@ d <- read.csv("../../Data/20190510-Adam-Survey/ComparativeData.csv") %>%
 # length at center of each bin, vector for plotting
 lenseq <- unique(d$len)
 
+# data for offset: same within a tow
+# use zeros as this data is tow-standardized
+d.offset <- d %>% 
+  distinct(station) %>%
+  mutate(offset = 0)
 
 # basis and penalty matrices for cubic spline
 # over length bins
@@ -207,6 +213,7 @@ nstation = nlevels(d$station)
 data = list(
   A = d %>% filter(gear == "NEST") %>% spread(len, catch) %>% dplyr::select(-station, -gear) %>% as.matrix(),
   B = d %>% filter(gear == "BALL") %>% spread(len, catch) %>% dplyr::select(-station, -gear) %>% as.matrix(),
+  offset = outer(d.offset$offset,rep(1,length(lenseq))),
   Xf = cs$X %*% eigende$vectors[,1:n_f+n_r],
   Xr = cs$X %*% eigende$vectors[,1:n_r],
   d = eigende$value[1:n_r]

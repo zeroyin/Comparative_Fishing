@@ -32,7 +32,7 @@ Type objective_function<Type>::operator() () {
 	// filter out zeros?
 	DATA_MATRIX(A); // catch number by A, by station by length
 	DATA_MATRIX(B); // catch number by B, by station by length
-	DATA_MATRIX(offset); // offset, validation with Millar's model: offset for zero obs is not zero
+	DATA_MATRIX(offset); // offset for each tow
 	DATA_MATRIX(Xf); // design matrix for fixed effect
 	DATA_MATRIX(Xr); // design matrix for random effect
 	DATA_VECTOR(d); // positive eigenvalues of penalty matrix S
