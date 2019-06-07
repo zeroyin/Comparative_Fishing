@@ -146,12 +146,16 @@ lines(d$len, fit$mu.fv/(1-fit$mu.fv)+1.96*sqrt(fit$mu.var) * (fit$mu.fv/(1-fit$m
 dev.off()
 
 
+
+
+
+
 # ------------------------------------------------
 # beta-binomial model with random effects
 rm(list = ls())
 
 i.species <- "LOBSTER"
-b.len <- 5
+b.len <- 1
 
 # read data
 d <- read.csv("../../Data/20190510-Adam-Survey/ComparativeData.csv") %>%
@@ -187,10 +191,10 @@ cs <- smooth.construct(
   knots = NULL
 )
 
-cs <- smooth.construct(
-  object = s(len, bs = "cr", k = 6),
-  data = d %>% group_by(len) %>% summarise(catch = sum()),
-  knots =  list(len = seq(min(lenseq),max(lenseq),length.out = 6)))
+# cs <- smooth.construct(
+#   object = s(len, bs = "cr", k = 30),
+#   data = d %>% group_by(len) %>% summarise(catch = sum()),
+#   knots =  list(len = seq(min(lenseq),max(lenseq),length.out = 30)))
 
 n_f <- 2
 n_r <- cs$df - n_f
@@ -222,7 +226,7 @@ parameters = list(
 map <- list(
   # log_s_b = factor(NA),
   # log_s_g = factor(NA),
-  # log_s_epsilon = factor(NA),
+  # log_s_epsilon = factor(NA)
   # chol_delta = rep(factor(NA), length(parameters$chol_delta))
 )
 
@@ -247,6 +251,7 @@ opt
 # fit <- fit_tmb(obj)
 # opt <- fit$opt
 # rep <- sdreport(obj)
+
 
 # plot results
 

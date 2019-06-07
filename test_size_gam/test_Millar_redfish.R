@@ -1,3 +1,6 @@
+
+
+
 # #########################################
 # test beta binomial model:
 # length GAM, with random effects
@@ -11,38 +14,43 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 
-load("data-NED2016.RData")
+load("../../Materials/From_Millar-TMB/redfish.RData")
 
-# organize data for model
+i.species <- "REDFISH"
+b.len <- 1
 
-i.species <- 11
-b.len <- 5
-
-d <- d.length %>% 
-    filter(species == i.species) %>%
+# read data
+d <- redfish.res$spp.dat.aug %>%
+    transmute(station = id, len = LENGTH, A = ALBATROSS_RECNUMLEN, B = BIGELOW_RECNUMLEN) %>% 
+    gather(vessel, catch, -station, -len) %>%
+    filter(catch > 0) %>%
     transmute(
         station = factor(station),
-        gear = factor(gear), 
+        vessel = factor(vessel), 
         len = (floor(len/b.len)*b.len+b.len/2), # length grouping
-        catch = c) %>%
-    group_by(station, gear, len) %>%
+        catch = catch) %>%
+    group_by(station, vessel, len) %>%
     summarise(catch = sum(catch)) %>%
     ungroup() %>%
-    complete(len, # remove using full_seq()
+    complete(len,
              station, 
-             gear, 
+             vessel, 
              fill = list(catch = 0)) # complete zero observations
-    
 
 # length at center of each bin, vector for plotting
-# lenseq <- full_seq(d$len, b.len)
 lenseq <- unique(d$len)
 
 
+# data for offset: same within a tow
+d.offset <- redfish.res$spp.dat.aug %>%
+    filter(ALBATROSS_RECNUMLEN + BIGELOW_RECNUMLEN > 0) %>%
+    transmute(station = factor(id), offset = offst) %>% 
+    group_by(station) %>%
+    slice(1) %>%
+    ungroup() 
+
+
 # basis and penalty matrices for cubic spline
-# over length bins
-# location of knots might influence smooth functions (and convergence)
-# default to 10 knots resulting in 2 fixed and 8 random effects
 library(mgcv)
 cs <- smooth.construct(
     object = s(len, bs = "cr"),
@@ -50,10 +58,10 @@ cs <- smooth.construct(
     knots = NULL
 )
 
-cs <- smooth.construct(
-    object = s(len, bs = "cr", k = 6),
-    data = d %>% group_by(len) %>% summarise(catch = sum()),
-    knots =  list(len = seq(min(lenseq),max(lenseq),length.out = 6)))
+# cs <- smooth.construct(
+#     object = s(len, bs = "cr", k = 6),
+#     data = d %>% group_by(len) %>% summarise(catch = sum()),
+#     knots =  list(len = seq(min(lenseq),max(lenseq),length.out = 6)))
 
 n_f <- 2
 n_r <- cs$df - n_f
@@ -64,8 +72,9 @@ nlen = length(lenseq)
 nstation = nlevels(d$station)
 
 data = list(
-    A = d %>% filter(gear == 9 ) %>% spread(len, catch) %>% select(-station, -gear) %>% as.matrix(),
-    B = d %>% filter(gear == 15) %>% spread(len, catch) %>% select(-station, -gear) %>% as.matrix(),
+    A = d %>% filter(vessel == "B") %>% spread(len, catch) %>% select(-station, -vessel) %>% as.matrix(),
+    B = d %>% filter(vessel == "A") %>% spread(len, catch) %>% select(-station, -vessel) %>% as.matrix(),
+    offset = outer(d.offset$offset,rep(1,length(lenseq))),
     Xf = cs$X %*% eigende$vectors[,1:n_f+n_r],
     Xr = cs$X %*% eigende$vectors[,1:n_r],
     d = eigende$value[1:n_r]
@@ -83,9 +92,11 @@ parameters = list(
     chol_delta = c(1,0,1) # use chol decomp in vector form
 )
 map <- list(
+    # beta = rep(factor(NA),2),
+    # gamma = rep(factor(NA),2),
     # log_s_b = factor(NA),
     # log_s_g = factor(NA),
-    # log_s_epsilon = factor(NA),
+    # log_s_epsilon = factor(NA)
     # chol_delta = rep(factor(NA), length(parameters$chol_delta))
 )
 
@@ -103,13 +114,8 @@ obj = MakeADFun(data=data,
 opt <- nlminb(obj$par,obj$fn,obj$gr)
 rep <- sdreport(obj)
 
-obj$gr()
 opt
 
-# library(TMBhelper)
-# fit <- fit_tmb(obj)
-# opt <- fit$opt
-# rep <- sdreport(obj)
 
 # plot results
 
@@ -146,52 +152,64 @@ lines(lenseq, est.mean_rho - std.mean_rho, col = "blue", lty = "dashed")
 dev.off()
 
 
-# test rho: (1) mean_rho = f(mean(mu)) (2) mean_rho = mean(f(mu)) 
+# compare with Tim's code
+# need to run Tim's model before this section
+
+n=as.vector(t(data$A+data$B));
+pred <- rep(NA,length(n))
+pred[n>0]=betabin.7$report()$mu
+mupred <- matrix(pred, dim(data$A)[1], byrow = T)
+
+
+jpeg(paste0("beta-binom-re/mu_by_station-TMB_SD-species_", i.species, ".jpg"),
+     res = 300, width = 20, height = 20, units = "in")
+par(mfrow=c(10,10))
+for(i in 1:nstation){
+    plot(lenseq, data$A[i,]/(data$A[i,]+data$B[i,]), pch =21, cex = 0.2, ylim = c(0, 1), ylab = "Prop. of Gear 9", main = paste0("Station ", levels(d$station)[i]))
+    points(lenseq, est.mu[i,], col = "blue", cex = 0.2)
+    lines(lenseq, est.mu[i,], col = "blue")
+    # lines(lenseq, est.mu[i,] - std.mu[i,], lty = "dashed")
+    # lines(lenseq, est.mu[i,] + std.mu[i,], lty = "dashed")
+    points(lenseq, mupred[i,], col = "red", cex = 0.2)
+    lines(lenseq, mupred[i,], col = "red")
+}
+dev.off()
+
+
+
+# tow-aggregated mu
+jpeg(paste0("beta-binom-re/mu_Tim-Yihao-species_", i.species, ".jpg"),
+     res = 200, width = 10, height = 8, units = "in")
+plot(lenseq, colMeans(est.mu, na.rm = T), ylim = c(0,1), type = "l", col = "blue")
+lines(lenseq,  colMeans(mupred, na.rm = T), ylim = c(0,1), type = "l", col = "red")
+for(i in 1:nstation){
+    points(lenseq++0.004*i-0.2, data$A[i,]/(data$A[i,]+data$B[i,]), pch = 19, cex =0.1)
+}
+dev.off()
+
+
+# predicted rho
+jpeg(paste0("beta-binom-re/rho_Tim-Yihao-species_", i.species, ".jpg"),
+     res = 200, width = 10, height = 8, units = "in")
 est.mean_rho_2 <- est[names(est) == "mean_rho_2"]
 std.mean_rho_2 <- std[names(std) == "mean_rho_2"]
-plot(lenseq, est.mean_rho, ylim = c(0,5), type = "l")
-lines(lenseq, est.mean_rho_2, col = "blue")
-
-
-# estimated mu with observations for each station
-# CI is for observation
-# jpeg(paste0("beta-binom-re/mu_by_station-species_", i.species, ".jpg"),
-#     res = 300, width = 12, height = 10, units = "in")
-# par(mfrow=c(4,4))
-# for(i in 1:nstation){
-#     plot(lenseq, data$A[i,]/(data$A[i,]+data$B[i,]), ylim = c(0, 1), ylab = "Prop. of Gear 9", main = paste0("Station ", levels(d$station)[i]))
-#     lines(lenseq, est.mu[i,])
-#     lines(lenseq, gamlss.dist::qBB(0.05, mu = est.mu[i,], sigma = obj$report()$phi[i,], bd = 1000)/1000, col = "blue")
-#     lines(lenseq, gamlss.dist::qBB(0.95, mu = est.mu[i,], sigma = obj$report()$phi[i,], bd = 1000)/1000, col = "blue")
-# }
-# dev.off()
-
-
-# estimated mu with observations for each station
-# SD is from TMB sd
-jpeg(paste0("beta-binom-re/mu_by_station-TMB_SD-species_", i.species, ".jpg"),
-     res = 300, width = 12, height = 10, units = "in")
-par(mfrow=c(4,4))
+plot(lenseq, log(est.mean_rho), ylim = c(-5,5), type = "l", col = "blue")
+lines(lenseq, log(est.mean_rho_2), col = "blue", lty = "dashed")
+# compare with Tim's results
+lines(redfish.res$log_rho_table[,1],(redfish.res$log_rho_table[,2]), col = "red")
 for(i in 1:nstation){
-    plot(lenseq, data$A[i,]/(data$A[i,]+data$B[i,]), ylim = c(0, 1), ylab = "Prop. of Gear 9", main = paste0("Station ", levels(d$station)[i]))
-    lines(lenseq, est.mu[i,])
-    lines(lenseq, est.mu[i,] - std.mu[i,], lty = "dashed")
-    lines(lenseq, est.mu[i,] + std.mu[i,], lty = "dashed")
-}
+    points(lenseq+0.004*i-0.2, log(data$A[i,]/data$B[i,])-data$offset[i], pch = 19, cex =0.1)
+} 
+points(lenseq, rep(-5, length(lenseq)), cex = 0.05*colSums(data$A==0))
+points(lenseq, rep(5, length(lenseq)), cex = 0.05*colSums(data$B==0))
+
+x=log(data$A/data$B)-data$offset; x[x==Inf]=NaN; x[x==-Inf]=NaN;
+points(lenseq, apply(x, 2, function(x) mean(x, na.rm = T)), col = "green", pch =8)
+points(lenseq, apply(x, 2, function(x) median(x, na.rm = T)), col = "yellow", pch = 19)
+
 dev.off()
 
 
-# estimated rho with observations for each station: 
-# calculation of CI: what to do
-jpeg(paste0("beta-binom-re/rho_by_station-TMB_SD-species_", i.species, ".jpg"),
-    res = 300, width = 12, height = 10, units = "in")
-par(mfrow=c(4,4))
-for(i in 1:nstation){
-    plot(lenseq, data$A[i,]/data$B[i,], ylim = range(0, 10), ylab = "Conversion: 9/15", main = paste0("Station ", levels(d$station)[i]))
-    lines(lenseq, est.rho[i,])
-    abline(a = 1, b = 0, col = "red")
-    lines(lenseq, est.rho[i,] - std.rho[i,], lty = "dashed")
-    lines(lenseq, est.rho[i,] + std.rho[i,], lty = "dashed")
-}
-dev.off()
+
+
 
