@@ -139,7 +139,7 @@ d.length <- data.length %>%
     inner_join(d.set, by = c("mission", "station", "setno")) %>%
     mutate(
         len = flen,
-        c = clen/distance # adjust catch for tow distance
+        catch = clen/distance # adjust catch for tow distance
     )
 
 

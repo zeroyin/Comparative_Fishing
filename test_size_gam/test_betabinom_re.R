@@ -11,11 +11,11 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 
-load("data-NED2016.RData")
+load("data-NED2013.RData")
 
 # organize data for model
 
-i.species <- 11
+i.species <- 10
 b.len <- 1
 
 d <- d.length %>% 
@@ -24,7 +24,7 @@ d <- d.length %>%
         station = factor(station),
         gear = factor(gear), 
         len = (floor(len/b.len)*b.len+b.len/2), # length grouping
-        catch = c) %>%
+        catch = catch) %>%
     group_by(station, gear, len) %>%
     summarise(catch = sum(catch)) %>%
     ungroup() %>%
@@ -138,7 +138,7 @@ std.rho <- matrix(std[names(std) == "rho"], nrow = nstation, ncol = nlen)
 
 
 # estimated mu, phi and rho for each station
-jpeg(paste0("beta-binom-re/estimates-CI95_zscore-species_", i.species, ".jpg"),
+jpeg(paste(sep = "-","beta-binom-re/NED2013/estimates","CI95_zscore","species",i.species,"lenbin",b.len,".jpg"),
      res = 300, width = 6, height = 10, units = "in")
 par(mfrow=c(3,1))
 plot(lenseq, est.mean_mu, ylim = c(0,1), type = "l")
@@ -157,7 +157,7 @@ dev.off()
 # test rho: (1) mean_rho = f(mean(mu)) (2) mean_rho = mean(f(mu)) 
 est.mean_rho_2 <- est[names(est) == "mean_rho_2"]
 std.mean_rho_2 <- std[names(std) == "mean_rho_2"]
-plot(lenseq, est.mean_rho, ylim = c(0,5), type = "l")
+plot(lenseq, est.mean_rho, ylim = c(0,5), type = "l", main = "black is 2 and blue is 1")
 lines(lenseq, est.mean_rho_2, col = "blue")
 
 
@@ -177,9 +177,9 @@ lines(lenseq, est.mean_rho_2, col = "blue")
 
 # estimated mu with observations for each station
 # SD is from TMB sd
-jpeg(paste0("beta-binom-re/mu_by_station-TMB_SD-species_", i.species, ".jpg"),
-     res = 300, width = 12, height = 10, units = "in")
-par(mfrow=c(4,4))
+jpeg(paste(sep = "-","beta-binom-re/NED2013/mu_by_station","TMB_SD","species",i.species,"lenbin",b.len,".jpg"),
+     res = 300, width = 24, height = 20, units = "in")
+par(mfrow=c(10,8))
 for(i in 1:nstation){
     plot(lenseq, data$A[i,]/(data$A[i,]+data$B[i,]), ylim = c(0, 1), ylab = "Prop. of Gear 9", main = paste0("Station ", levels(d$station)[i]))
     lines(lenseq, est.mu[i,])
@@ -191,11 +191,11 @@ dev.off()
 
 # estimated rho with observations for each station: 
 # calculation of CI: what to do
-jpeg(paste0("beta-binom-re/rho_by_station-TMB_SD-species_", i.species, ".jpg"),
-    res = 300, width = 12, height = 10, units = "in")
-par(mfrow=c(4,4))
+jpeg(paste(sep = "-","beta-binom-re/NED2013/rho_by_station","TMB_SD","species",i.species,"lenbin",b.len,".jpg"),
+     res = 300, width = 24, height = 20, units = "in")
+par(mfrow=c(10,8))
 for(i in 1:nstation){
-    plot(lenseq, data$A[i,]/data$B[i,], ylim = range(0, 10), ylab = "Conversion: 9/15", main = paste0("Station ", levels(d$station)[i]))
+    plot(lenseq, data$A[i,]/data$B[i,], ylim = range(0, 5), ylab = "Conversion: 9/15", main = paste0("Station ", levels(d$station)[i]))
     lines(lenseq, est.rho[i,])
     abline(a = 1, b = 0, col = "red")
     lines(lenseq, est.rho[i,] - std.rho[i,], lty = "dashed")

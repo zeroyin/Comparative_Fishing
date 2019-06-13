@@ -24,7 +24,7 @@ data.catch <- read.xlsx(
 
 # paired by station
 
-d <- data.set %>% 
+d.length <- data.set %>% 
     filter(TYPE == 5) %>%
     transmute(mission = MISSION, 
               setno = as.integer(SETNO),
@@ -46,20 +46,20 @@ d <- data.set %>%
         by = c("mission", "setno")
     )
 
-save(d, file = "data-NED2013.RData")
+save(d.length, file = "data-NED2013.RData")
 
 
 # Check data
 library(ggplot2)
 
 # Table: number of obs by species
-d %>% 
+d.length %>% 
     count(species, name) %>%
     print(n=Inf)
 
 
 # figure: catch by length by species
-p <- d %>% 
+p <- d.length %>% 
     mutate(species = paste(species,name,sep = "-")) %>%
     ggplot() +
     geom_line(aes(len, catch, group = as.factor(station)), color = "gray") +
@@ -70,19 +70,36 @@ ggsave(filename = "data_description/NED2013/catch_compare_by_len_species-all_spe
        plot = p, width = 10, height = 150, limitsize = FALSE)
 
 
-# sample rho
-p <- d %>% 
+# sample mu
+p <- d.length %>% 
     mutate(species = paste(species,name,sep = "-")) %>%
     select(species, station, gear, len, catch) %>%
     spread(gear, catch, fill = NA) %>%
-    mutate(ratio = `15`/`9`) %>%
+    mutate(mu = `9`/(`15`+`9`)) %>%
+    ggplot(aes(len, mu, group = station)) +
+    geom_line(color = "gray") +
+    geom_point(size = 0.1) +
+    ylim(c(0,1)) +
+    facet_wrap(~species, scales = "free", ncol = 1) +
+    theme_bw()
+ggsave(filename = "data_description/NED2013/sample_mu-all_species.pdf",
+       plot = p, width = 5, height = 150, limitsize = FALSE)
+
+
+
+# sample rho
+p <- d.length %>% 
+    mutate(species = paste(species,name,sep = "-")) %>%
+    select(species, station, gear, len, catch) %>%
+    spread(gear, catch, fill = NA) %>%
+    mutate(ratio = `9`/`15`) %>%
     ggplot(aes(len, log10(ratio), group = station)) +
     geom_line(color = "gray") +
     geom_point(size = 0.1) +
-    geom_abline(intercept = 0, slope = 0) +
+    geom_abline(intercept = 0, slope = 0, color = "orange") +
     facet_wrap(~species, scales = "free", ncol = 1) +
     theme_bw()
-ggsave(filename = "data_description/NED2013/sample_rho-all_species.pdf",
+ggsave(filename = "data_description/NED2013/sample_log10_rho-all_species.pdf",
        plot = p, width = 5, height = 150, limitsize = FALSE)
 
 
@@ -91,7 +108,7 @@ ggsave(filename = "data_description/NED2013/sample_rho-all_species.pdf",
 i.species <- 11
 
 # paired catch
-p <- d %>% 
+p <- d.length %>% 
     filter(species == i.species) %>%
     ggplot()+
     geom_line(aes(len, catch, group = station), color = "gray") +
@@ -105,7 +122,7 @@ ggsave(filename = paste0("data_description/NED2013/paired_catch-species_",i.spec
 
 
 # paired catch by station: length spectrum
-p <- d %>%
+p <- d.length %>%
     filter(species == i.species) %>%
     ggplot() +
     geom_tile(aes(as.factor(station), len, fill = catch)) +
