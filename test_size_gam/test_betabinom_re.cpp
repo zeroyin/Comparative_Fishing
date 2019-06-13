@@ -33,8 +33,8 @@ Type objective_function<Type>::operator() () {
 	DATA_MATRIX(A); // catch number by A, by station by length
 	DATA_MATRIX(B); // catch number by B, by station by length
 	DATA_MATRIX(offset); // offset for each tow
-	DATA_MATRIX(Xf); // design matrix for fixed effect
-	DATA_MATRIX(Xr); // design matrix for random effect
+	DATA_MATRIX(Xf); // design matrix for fixed effect of mu, phi
+	DATA_MATRIX(Xr); // design matrix for random effect of mu, phi
 	DATA_VECTOR(d); // positive eigenvalues of penalty matrix S
 
 	// parameters:
@@ -74,8 +74,8 @@ Type objective_function<Type>::operator() () {
 	C_delta = L_delta * L_delta.transpose();
 
 
-	// set up objective fn 
-	vector<Type> nll(5); nll.setZero(); // initialize negative log likelihood
+	// set up objective fn components: negative log likelihood
+	vector<Type> nll(5); nll.setZero(); // initialize
 
 	// random effects with smooth penalty
 	for(int i_r = 0; i_r < n_r; i_r++){
@@ -108,6 +108,7 @@ Type objective_function<Type>::operator() () {
 				eta_mu += Xr(i_len, i_r) * (b(i_r) + epsilon(i_s, i_r));
 				eta_phi += Xr(i_len, i_r) * g(i_r);
 			}
+
 			// link function
 			mu(i_s, i_len) = invlogit(eta_mu + offset(i_s, i_len));
 			phi(i_s, i_len) = exp(eta_phi);
@@ -116,24 +117,25 @@ Type objective_function<Type>::operator() () {
 			rho(i_s, i_len) = mu(i_s, i_len)/(Type(1)-mu(i_s, i_len));
 
 			// transformation to shape parameter
-	        Type s1 = mu(i_s, i_len)*phi(i_s, i_len); // s1 = mu(i) * mu(i) / phi(i);
-	        Type s2 = (Type(1)-mu(i_s, i_len))*phi(i_s, i_len); // phi(i) / mu(i);
+			Type s1 = mu(i_s, i_len)*phi(i_s, i_len); // s1 = mu(i) * mu(i) / phi(i);
+			Type s2 = (Type(1)-mu(i_s, i_len))*phi(i_s, i_len); // phi(i) / mu(i);
 
+			// observation likelihood
 			nll(4) -= dbetabinom(A(i_s, i_len), s1, s2, N(i_s, i_len), true);
 		}
 	}
 
 
-
 	// derived quantities  
-	vector<Type> mean_mu = mu.colwise().sum()/mu.rows(); // column means
+	vector<Type> mean_mu = mu.colwise().sum()/mu.rows(); // column means: mu
 	ADREPORT(mean_mu);
-	vector<Type> mean_phi = phi.colwise().sum()/phi.rows(); // column means
+	vector<Type> mean_phi = phi.colwise().sum()/phi.rows(); // column means: mu
 	ADREPORT(mean_phi);
-	vector<Type> mean_rho = rho.colwise().sum()/rho.rows();
+	vector<Type> mean_rho = rho.colwise().sum()/rho.rows(); // default calculation of rho
 	ADREPORT(mean_rho);
-	vector<Type> mean_rho_2 = mean_mu/(Type(1)-mean_mu);
+	vector<Type> mean_rho_2 = mean_mu/(Type(1)-mean_mu); // f(mean(mu)) vs mean(f(mu))
 	ADREPORT(mean_rho_2);
+
 
 	// sdreport
 	ADREPORT(mu);
@@ -152,12 +154,12 @@ Type objective_function<Type>::operator() () {
 	REPORT(epsilon);
 	REPORT(C_delta);
 
-
+	// sum up nll as joint nll
 	Type jnll = nll.sum();
 	
+	// report for diagnostics
 	REPORT(nll);
 	REPORT(jnll);
-
 
 	return jnll;
 }
