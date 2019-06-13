@@ -90,6 +90,7 @@ ggsave(filename = "data_description/NED2013/sample_rho-all_species.pdf",
 # species 11
 i.species <- 11
 
+# paired catch
 p <- d %>% 
     filter(species == i.species) %>%
     ggplot()+
@@ -97,10 +98,24 @@ p <- d %>%
     stat_summary(aes(len, catch), fun.y=median, geom="line", colour="orange") +
     stat_summary(aes(len, catch), fun.y=mean, geom="line", colour="blue") +
     facet_wrap(~gear, ncol = 2) +
-    theme_bw() 
+    theme_bw() +
+    xlim(c(0,60))
 ggsave(filename = paste0("data_description/NED2013/paired_catch-species_",i.species,".pdf"),
        plot = p, width = 8, height = 6)
 
+
+# paired catch by station: length spectrum
+p <- d %>%
+    filter(species == i.species) %>%
+    ggplot() +
+    geom_tile(aes(as.factor(station), len, fill = catch)) +
+    scale_fill_continuous(low = "white", high = "red", trans = "log10", na.value = "white") +
+    facet_wrap(~gear, nrow = 2) +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 90)) +
+    ylim(c(0,60))
+ggsave(filename = paste0("data_description/NED2013/paired_catch_spectrum-species_",i.species,".pdf"),
+       plot = p, width = 15, height = 10)
 
 
 
