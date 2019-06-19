@@ -1,10 +1,6 @@
-
-
-
 # #########################################
-# test beta binomial model:
-# length GAM, with random effects
-# model in TMB
+# Validate my model with Tim's model
+# using redfish data from Tim
 # #########################################
 
 rm(list = ls())
@@ -126,8 +122,8 @@ est.mean_mu <- est[names(est) == "mean_mu"]
 std.mean_mu <- std[names(std) == "mean_mu"]
 est.mean_phi <- est[names(est) == "mean_phi"]
 std.mean_phi <- std[names(std) == "mean_phi"]
-est.mean_rho <- est[names(est) == "mean_rho"]
-std.mean_rho <- std[names(std) == "mean_rho"]
+est.mean_log_rho <- est[names(est) == "mean_log_rho"]
+std.mean_log_rho <- std[names(std) == "mean_log_rho"]
 est.mu <- matrix(est[names(est) == "mu"], nrow = nstation, ncol = nlen)
 std.mu <- matrix(std[names(std) == "mu"], nrow = nstation, ncol = nlen)
 est.rho <- matrix(est[names(est) == "rho"], nrow = nstation, ncol = nlen)
@@ -144,11 +140,11 @@ for(i in 1:nstation){lines(lenseq, obj$report()$mu[i,], col = "gray")}
 lines(lenseq, est.mean_mu + 1.96*std.mean_mu, col = "blue", lty = "dashed")
 lines(lenseq, est.mean_mu - 1.96*std.mean_mu, col = "blue", lty = "dashed")
 plot(lenseq, est.mean_phi, type = "l")
-plot(lenseq, est.mean_rho, ylim = c(0,10), type = "l")
+plot(lenseq, est.mean_log_rho, ylim = c(-5,5), type = "l")
 abline(a = 1, b = 0, col = "red")
-for(i in 1:nstation){lines(lenseq, obj$report()$rho[i,], col = "gray")}
-lines(lenseq, est.mean_rho + std.mean_rho, col = "blue", lty = "dashed")
-lines(lenseq, est.mean_rho - std.mean_rho, col = "blue", lty = "dashed")
+for(i in 1:nstation){lines(lenseq, obj$report()$eta_mu[i,], col = "gray")}
+lines(lenseq, est.mean_log_rho + std.mean_log_rho, col = "blue", lty = "dashed")
+lines(lenseq, est.mean_log_rho - std.mean_log_rho, col = "blue", lty = "dashed")
 dev.off()
 
 
@@ -183,19 +179,16 @@ jpeg(paste0("beta-binom-re/mu_Tim-Yihao-species_", i.species, ".jpg"),
 plot(lenseq, colMeans(est.mu, na.rm = T), ylim = c(0,1), type = "l", col = "blue")
 lines(lenseq,  colMeans(mupred, na.rm = T), ylim = c(0,1), type = "l", col = "red")
 for(i in 1:nstation){
-    points(lenseq++0.004*i-0.2, data$A[i,]/(data$A[i,]+data$B[i,]), pch = 19, cex =0.1)
+    points(lenseq+0.004*i-0.2, data$A[i,]/(data$A[i,]+data$B[i,]), pch = 19, cex =0.1)
 }
 dev.off()
 
 
 # predicted rho
+# compare with Tim's results
 jpeg(paste0("beta-binom-re/rho_Tim-Yihao-species_", i.species, ".jpg"),
      res = 200, width = 10, height = 8, units = "in")
-est.mean_rho_2 <- est[names(est) == "mean_rho_2"]
-std.mean_rho_2 <- std[names(std) == "mean_rho_2"]
-plot(lenseq, log(est.mean_rho), ylim = c(-5,5), type = "l", col = "blue")
-lines(lenseq, log(est.mean_rho_2), col = "blue", lty = "dashed")
-# compare with Tim's results
+plot(lenseq, est.mean_log_rho, ylim = c(-5,5), type = "l", col = "blue")
 lines(redfish.res$log_rho_table[,1],(redfish.res$log_rho_table[,2]), col = "red")
 for(i in 1:nstation){
     points(lenseq+0.004*i-0.2, log(data$A[i,]/data$B[i,])-data$offset[i], pch = 19, cex =0.1)
@@ -203,13 +196,11 @@ for(i in 1:nstation){
 points(lenseq, rep(-5, length(lenseq)), cex = 0.05*colSums(data$A==0))
 points(lenseq, rep(5, length(lenseq)), cex = 0.05*colSums(data$B==0))
 
+# add mean and median
 x=log(data$A/data$B)-data$offset; x[x==Inf]=NaN; x[x==-Inf]=NaN;
 points(lenseq, apply(x, 2, function(x) mean(x, na.rm = T)), col = "green", pch =8)
 points(lenseq, apply(x, 2, function(x) median(x, na.rm = T)), col = "yellow", pch = 19)
 
 dev.off()
-
-
-
 
 

@@ -92,29 +92,31 @@ Type objective_function<Type>::operator() () {
 	}
 
 	// Observation likelihood
+	matrix<Type> eta_mu(n_s, n_len); eta_mu.setZero();
+	matrix<Type> eta_phi(n_s, n_len); eta_phi.setZero();
 	matrix<Type> mu(n_s, n_len);
 	matrix<Type> phi(n_s, n_len);
 	matrix<Type> rho(n_s, n_len);
 	for(int i_s = 0; i_s < n_s; i_s++){
 		for(int i_len = 0; i_len < n_len; i_len++){
 			// linear predictors
-			Type eta_mu = Type(0);
-			Type eta_phi = Type(0);
 			for(int i_f = 0; i_f < n_f; i_f++){
-				eta_mu += Xf(i_len, i_f) * (beta(i_f) + delta(i_s, i_f));
-				eta_phi += Xf(i_len, i_f) * gamma(i_f);
+				eta_mu(i_s, i_len) += Xf(i_len, i_f) * (beta(i_f) + delta(i_s, i_f));
+				eta_phi(i_s, i_len) += Xf(i_len, i_f) * gamma(i_f);
 			}
 			for(int i_r = 0; i_r < n_r; i_r++){
-				eta_mu += Xr(i_len, i_r) * (b(i_r) + epsilon(i_s, i_r));
-				eta_phi += Xr(i_len, i_r) * g(i_r);
+				eta_mu(i_s, i_len) += Xr(i_len, i_r) * (b(i_r) + epsilon(i_s, i_r));
+				eta_phi(i_s, i_len) += Xr(i_len, i_r) * g(i_r);
 			}
 
 			// link function
-			mu(i_s, i_len) = invlogit(eta_mu + offset(i_s, i_len));
-			phi(i_s, i_len) = exp(eta_phi);
+			mu(i_s, i_len) = invlogit(eta_mu(i_s, i_len) + offset(i_s, i_len));
+			phi(i_s, i_len) = exp(eta_phi(i_s, i_len));
 
-			// conversion rate derived from proportion
-			rho(i_s, i_len) = mu(i_s, i_len)/(Type(1)-mu(i_s, i_len));
+			// conversion rate calculation alternative: 
+			rho(i_s, i_len) = exp(eta_mu(i_s, i_len));
+			// conversion rate derived from proportion:
+			// rho(i_s, i_len) = mu(i_s, i_len)/(Type(1)-mu(i_s, i_len))*exp(-offset(i_s, i_len));
 
 			// transformation to shape parameter
 			Type s1 = mu(i_s, i_len)*phi(i_s, i_len); // s1 = mu(i) * mu(i) / phi(i);
@@ -129,13 +131,10 @@ Type objective_function<Type>::operator() () {
 	// derived quantities  
 	vector<Type> mean_mu = mu.colwise().sum()/mu.rows(); // column means: mu
 	ADREPORT(mean_mu);
-	vector<Type> mean_phi = phi.colwise().sum()/phi.rows(); // column means: mu
+	vector<Type> mean_phi = phi.colwise().sum()/phi.rows(); // column means: phi
 	ADREPORT(mean_phi);
-	vector<Type> mean_rho = rho.colwise().sum()/rho.rows(); // default calculation of rho
-	ADREPORT(mean_rho);
-	vector<Type> mean_rho_2 = mean_mu/(Type(1)-mean_mu); // f(mean(mu)) vs mean(f(mu))
-	ADREPORT(mean_rho_2);
-
+	vector<Type> mean_log_rho = eta_mu.colwise().sum()/eta_mu.rows(); // use log rho
+	ADREPORT(mean_log_rho);
 
 	// sdreport
 	ADREPORT(mu);
@@ -146,6 +145,8 @@ Type objective_function<Type>::operator() () {
 	REPORT(mu);
 	REPORT(phi);
 	REPORT(rho);
+	REPORT(eta_mu);
+	REPORT(eta_phi);
 	REPORT(beta);
 	REPORT(b);
 	REPORT(gamma);

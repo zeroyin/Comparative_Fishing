@@ -15,7 +15,7 @@ load("data-NED2013.RData")
 
 # organize data for model
 
-i.species <- 10
+i.species <- 23
 b.len <- 1
 
 d <- d.length %>% 
@@ -111,13 +111,8 @@ obj = MakeADFun(data=data,
 opt <- nlminb(obj$par,obj$fn,obj$gr)
 rep <- sdreport(obj)
 
-obj$gr()
 opt
 
-# library(TMBhelper)
-# fit <- fit_tmb(obj)
-# opt <- fit$opt
-# rep <- sdreport(obj)
 
 # plot results
 
@@ -128,8 +123,8 @@ est.mean_mu <- est[names(est) == "mean_mu"]
 std.mean_mu <- std[names(std) == "mean_mu"]
 est.mean_phi <- est[names(est) == "mean_phi"]
 std.mean_phi <- std[names(std) == "mean_phi"]
-est.mean_rho <- est[names(est) == "mean_rho"]
-std.mean_rho <- std[names(std) == "mean_rho"]
+est.mean_log_rho <- est[names(est) == "mean_log_rho"]
+std.mean_log_rho <- std[names(std) == "mean_log_rho"]
 est.mu <- matrix(est[names(est) == "mu"], nrow = nstation, ncol = nlen)
 std.mu <- matrix(std[names(std) == "mu"], nrow = nstation, ncol = nlen)
 est.rho <- matrix(est[names(est) == "rho"], nrow = nstation, ncol = nlen)
@@ -138,7 +133,7 @@ std.rho <- matrix(std[names(std) == "rho"], nrow = nstation, ncol = nlen)
 
 
 # estimated mu, phi and rho for each station
-jpeg(paste(sep = "-","beta-binom-re/NED2013/estimates","CI95_zscore","species",i.species,"lenbin",b.len,".jpg"),
+jpeg(paste(sep = "-","beta-binom-re/NED2013/estimates","species",i.species,"lenbin",b.len,"CI95_zscore.jpg"),
      res = 300, width = 6, height = 10, units = "in")
 par(mfrow=c(3,1))
 plot(lenseq, est.mean_mu, ylim = c(0,1), type = "l")
@@ -146,19 +141,12 @@ for(i in 1:nstation){lines(lenseq, obj$report()$mu[i,], col = "gray")}
 lines(lenseq, est.mean_mu + 1.96*std.mean_mu, col = "blue", lty = "dashed")
 lines(lenseq, est.mean_mu - 1.96*std.mean_mu, col = "blue", lty = "dashed")
 plot(lenseq, est.mean_phi, type = "l")
-plot(lenseq, est.mean_rho, ylim = c(0,10), type = "l")
-abline(a = 1, b = 0, col = "red")
-for(i in 1:nstation){lines(lenseq, obj$report()$rho[i,], col = "gray")}
-lines(lenseq, est.mean_rho + std.mean_rho, col = "blue", lty = "dashed")
-lines(lenseq, est.mean_rho - std.mean_rho, col = "blue", lty = "dashed")
+plot(lenseq, est.mean_log_rho, ylim = c(-4,4), type = "l")
+abline(a = 0, b = 0, col = "red")
+for(i in 1:nstation){lines(lenseq, obj$report()$eta_mu[i,], col = "gray")}
+lines(lenseq, est.mean_log_rho + std.mean_log_rho, col = "blue", lty = "dashed")
+lines(lenseq, est.mean_log_rho - std.mean_log_rho, col = "blue", lty = "dashed")
 dev.off()
-
-
-# test rho: (1) mean_rho = f(mean(mu)) (2) mean_rho = mean(f(mu)) 
-est.mean_rho_2 <- est[names(est) == "mean_rho_2"]
-std.mean_rho_2 <- std[names(std) == "mean_rho_2"]
-plot(lenseq, est.mean_rho, ylim = c(0,5), type = "l", main = "black is 2 and blue is 1")
-lines(lenseq, est.mean_rho_2, col = "blue")
 
 
 # estimated mu with observations for each station
@@ -177,7 +165,7 @@ lines(lenseq, est.mean_rho_2, col = "blue")
 
 # estimated mu with observations for each station
 # SD is from TMB sd
-jpeg(paste(sep = "-","beta-binom-re/NED2013/mu_by_station","TMB_SD","species",i.species,"lenbin",b.len,".jpg"),
+jpeg(paste(sep = "-","beta-binom-re/NED2013/mu_by_station","species",i.species,"lenbin",b.len,"TMB_SD.jpg"),
      res = 300, width = 24, height = 20, units = "in")
 par(mfrow=c(10,8))
 for(i in 1:nstation){
@@ -191,7 +179,7 @@ dev.off()
 
 # estimated rho with observations for each station: 
 # calculation of CI: what to do
-jpeg(paste(sep = "-","beta-binom-re/NED2013/rho_by_station","TMB_SD","species",i.species,"lenbin",b.len,".jpg"),
+jpeg(paste(sep = "-","beta-binom-re/NED2013/rho_by_station","species",i.species,"lenbin",b.len,"TMB_SD.jpg"),
      res = 300, width = 24, height = 20, units = "in")
 par(mfrow=c(10,8))
 for(i in 1:nstation){
@@ -202,4 +190,12 @@ for(i in 1:nstation){
     lines(lenseq, est.rho[i,] + std.rho[i,], lty = "dashed")
 }
 dev.off()
+
+
+
+# ##############################################
+# Produce simplified figures for documentation
+# ##############################################
+
+
 
