@@ -191,7 +191,7 @@ jpeg(paste0("beta-binom-re/rho_Tim-Yihao-species_", i.species, ".jpg"),
 plot(lenseq, est.mean_log_rho, ylim = c(-5,5), type = "l", col = "blue")
 lines(redfish.res$log_rho_table[,1],(redfish.res$log_rho_table[,2]), col = "red")
 for(i in 1:nstation){
-    points(lenseq+0.004*i-0.2, log(data$A[i,]/data$B[i,])-data$offset[i], pch = 19, cex =0.1)
+    points(lenseq+0.004*i-0.2, log(data$A[i,]/data$B[i,])-data$offset[i,], pch = 19, cex =0.1)
 } 
 points(lenseq, rep(-5, length(lenseq)), cex = 0.05*colSums(data$A==0))
 points(lenseq, rep(5, length(lenseq)), cex = 0.05*colSums(data$B==0))

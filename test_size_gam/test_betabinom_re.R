@@ -15,7 +15,7 @@ load("data-NED2013.RData")
 
 # organize data for model
 
-i.species <- 23
+i.species <- 10
 b.len <- 1
 
 d <- d.length %>% 
@@ -66,10 +66,16 @@ n_f <- 2
 n_r <- cs$df - n_f
 eigende <- eigen(cs$S[[1]])
 
+# run TMB model
+library(TMB)
+version <- "test_betabinom_re"
+compile(paste0(version,".cpp"))
+dyn.load(dynlib(version))
+
+
 # input for TMB
 nlen = length(lenseq)
 nstation = nlevels(d$station)
-
 data = list(
     A = d %>% filter(gear == 9 ) %>% spread(len, catch) %>% select(-station, -gear) %>% as.matrix(),
     B = d %>% filter(gear == 15) %>% spread(len, catch) %>% select(-station, -gear) %>% as.matrix(),
@@ -78,7 +84,36 @@ data = list(
     Xr = cs$X %*% eigende$vectors[,1:n_r],
     d = eigende$value[1:n_r]
 )
-parameters = list(
+
+# -------------- optimizing one-stage ------------------ #
+# parameters = list(
+#     beta = rep(0, n_f),
+#     b = rep(0, n_r),
+#     gamma = rep(0, n_f),
+#     g = rep(0, n_r),
+#     delta = matrix(0, nstation, n_f),
+#     epsilon = matrix(0, nstation, n_r),
+#     log_s_b = log(10),
+#     log_s_g = log(10),
+#     log_s_epsilon = log(10),
+#     chol_delta = c(1,0,1) # use chol decomp in vector form
+# )
+# map <- list(
+#     log_s_epsilon = factor(NA)
+# )
+# obj = MakeADFun(data=data,
+#                 parameters=parameters,
+#                 map=map,
+#                 DLL=version,
+#                 random = c("b", "g", "delta", "epsilon"),
+#                 silent = F)
+# opt <- nlminb(obj$par,obj$fn,obj$gr)
+
+
+
+# -------------- separate stages ----------------------- #
+# run tape stage 1
+parameters1 = list(
     beta = rep(0, n_f),
     b = rep(0, n_r),
     gamma = rep(0, n_f),
@@ -90,31 +125,52 @@ parameters = list(
     log_s_epsilon = log(10),
     chol_delta = c(1,0,1) # use chol decomp in vector form
 )
-map <- list(
-    # log_s_b = factor(NA),
-    # log_s_g = factor(NA),
-    # log_s_epsilon = factor(NA),
-    # chol_delta = rep(factor(NA), length(parameters$chol_delta))
+map1 <- list(
+    chol_delta = factor(rep(NA,3))
 )
 
-# run TMB model
-library(TMB)
-version <- "test_betabinom_re"
-compile(paste0(version,".cpp"))
-dyn.load(dynlib(version))
-obj = MakeADFun(data=data,
-                parameters=parameters,
-                map = map,
-                DLL=version,
-                random = c("b", "g", "delta", "epsilon"),
-                silent = F)
-opt <- nlminb(obj$par,obj$fn,obj$gr)
+obj1 = MakeADFun(data=data,
+                 parameters=parameters1,
+                 map = map1,
+                 DLL=version,
+                 random = c("b", "g", "delta", "epsilon"),
+                 silent = F)
+opt1 <- nlminb(obj1$par,obj1$fn,obj1$gr)
+
+opt1
+
+# run tape stage 2
+parameters2 = list(
+    beta = obj1$report()$beta,
+    b = obj1$report()$b,
+    gamma = obj1$report()$gamma,
+    g = obj1$report()$g,
+    delta = obj1$report()$delta,
+    epsilon = obj1$report()$epsilon,
+    log_s_b = opt1$par["log_s_b"],
+    log_s_g = opt1$par["log_s_g"],
+    log_s_epsilon = opt1$par["log_s_epsilon"],
+    chol_delta = c(1,0,1) # use chol decomp in vector form
+)
+obj2 = MakeADFun(data=data,
+                 parameters=parameters2,
+                 DLL=version,
+                 random = c("b", "g", "delta", "epsilon"),
+                 silent = F)
+opt2 <- nlminb(obj2$par,obj2$fn,obj2$gr)
+
+opt2
+
+# final
+obj <- obj2
+opt <- opt2
+
+
+# #################################################
+# Results: report and visualize
+
 rep <- sdreport(obj)
 
-opt
-
-
-# plot results
 
 # estimate and std of mu and phi and rho
 est <- summary(rep, "report")[,"Estimate"]
@@ -193,9 +249,72 @@ dev.off()
 
 
 
-# ##############################################
-# Produce simplified figures for documentation
-# ##############################################
+
+
+# ################################################
+# Produce simplified figures for the documentation
+
+# paired catch
+p <- d.length %>% 
+    filter(species == i.species) %>%
+    ggplot()+
+    geom_line(aes(len, catch, group = station), color = "gray") +
+    stat_summary(aes(len, catch), fun.y=median, geom="line", colour="orange") +
+    stat_summary(aes(len, catch), fun.y=mean, geom="line", colour="blue") +
+    facet_wrap(~gear, ncol = 1) +
+    theme_bw() +
+    xlim(range(lenseq)) +
+    scale_y_continuous(trans = "log10")
+ggsave(filename = paste(sep = "-","beta-binom-re/NED2013/pair","species",i.species,"doc.jpg"),
+       plot = p, width = 8, height = 6)
 
 
 
+# estimated mu
+jpeg(paste(sep = "-","beta-binom-re/NED2013/mu","species",i.species,"doc.jpg"),
+     res = 300, width = 8, height = 6, units = "in")
+plot(lenseq, rep(0, length(lenseq)), ylim = c(0,1), type = "l", 
+     xlab = "Length", ylab = "Prob. Gear 9")
+for(i in 1:nstation){lines(lenseq, obj$report()$mu[i,], col = "gray")}
+lines(lenseq, est.mean_mu, col = "blue")
+lines(lenseq, est.mean_mu + 1.96*std.mean_mu, col = "blue", lty = "dashed")
+lines(lenseq, est.mean_mu - 1.96*std.mean_mu, col = "blue", lty = "dashed")
+dev.off()
+
+
+# log rho
+jpeg(paste(sep = "-","beta-binom-re/NED2013/rho","species",i.species,"doc.jpg"),
+     res = 300, width = 8, height = 6, units = "in")
+plot(lenseq, rep(0, length(lenseq)), ylim = c(-3,3), type = "l", 
+     xlab = "Length", ylab = "Log of Conversion")
+for(i in 1:nstation){points(lenseq+0.004*i-0.2, log(data$A[i,]/data$B[i,])-data$offset[i], pch = 19, cex =0.1, col = "darkgray")}
+lines(lenseq, est.mean_log_rho, col = "blue")
+dev.off()
+
+
+# 
+# # mu with sample mean of mu
+# plot(lenseq, est.mean_mu, col = "blue", type = "l", ylim = c(0,1), 
+#      xlab = "Length", ylab = "Prop. Gear 9")
+# for(i in 1:nstation){points(lenseq+0.006*i-0.2, data$A[i,]/(data$A[i,]+data$B[i,]), pch = 19, cex =0.1, col = "darkgray")}
+# x=data$A/(data$A+data$B); x[x==Inf]=NaN; x[x==-Inf]=NaN;
+# points(lenseq, apply(x, 2, function(x) mean(x, na.rm = T)), col = "black", pch = 1)
+# 
+# 
+# # log rho with sample mean of log rho
+# plot(lenseq, rep(0, length(lenseq)), ylim = c(-3,3), type = "l", 
+#      xlab = "Length", ylab = "Log of Conversion")
+# for(i in 1:nstation){points(lenseq+0.006*i-0.2, log(data$B[i,]/data$A[i,])-data$offset[i,], pch = 19, cex =0.1, col = "darkgray")}
+# lines(lenseq, est.mean_log_rho, col = "blue")
+# x=log(data$A/data$B)-data$offset; x[x==Inf]=NaN; x[x==-Inf]=NaN;
+# points(lenseq, apply(x, 2, function(x) mean(x, na.rm = T)), col = "black", pch = 1)
+# 
+# 
+# # rho with sample mean of rho
+# plot(lenseq, rep(1, length(lenseq)), ylim = c(0,6), type = "l", 
+#      xlab = "Length", ylab = "Conversion")
+# for(i in 1:nstation){points(lenseq+0.004*i-0.2, (data$A[i,]/data$B[i,])-data$offset[i,], pch = 19, cex =0.1, col = "darkgray")}
+# lines(lenseq, exp(est.mean_log_rho), col = "blue")
+# x=(data$A/data$B)-data$offset; x[x==Inf]=NaN; x[x==-Inf]=NaN;
+# points(lenseq, apply(x, 2, function(x) median(x, na.rm = T)), col = "black", pch = 1)
+# 
