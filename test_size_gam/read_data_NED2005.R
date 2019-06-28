@@ -128,6 +128,7 @@ data.catch <- map_df(
 d.length <- bind_rows(data.set.p1, data.set.p2) %>%
     inner_join(data.detail, by = c("mission", "setno")) %>%
     left_join(data.catch, by = "species") %>%
+    filter(station!=1014) %>% # additional exclusions suggested by Don
     as.data.frame()
 
 
@@ -254,7 +255,7 @@ ggsave(filename = "data_description/NED2005/sample_log10_rho-all_species.pdf",
 
 
 # select species
-i.species <- 23
+i.species <- 11
 
 # paired catch
 p <- d.length %>% 
