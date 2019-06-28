@@ -16,7 +16,7 @@ load("data-NED2013.RData")
 
 d.length %>% count(species, name) %>% print(n=Inf)
 
-i.species <- 10
+i.species <- 11
 
 d <- d.length %>% 
     filter(species == i.species) %>%
