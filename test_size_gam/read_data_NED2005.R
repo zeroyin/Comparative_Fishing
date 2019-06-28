@@ -1,6 +1,8 @@
-# #######################################
+# #############################################
 # Read data: NED2005
-# #######################################
+# Two trips paired with Don's station table
+# One trip paired by mission/setno
+# #############################################
 
 rm(list = ls())
 setwd("C:/Users/yinyi/Dropbox/BIO/Comparative_Fishing/Workspace/test_size_gam/")
@@ -36,78 +38,50 @@ data.set <- map_df(sheet.set, ~ read_excel(
               lon = - (floor(SLONG/100) + SLONG%%100/60), 
               lat = floor(SLAT/100) + SLAT%%100/60) %>%
     mutate(vessel = as.factor(substr(mission, 1, 3)))
-              
+
+
+
 # ----------------------------------------------------------
-# pair tows by distance/lat-long
+# pair by new table from Don
+path.stn <- paste0(data.path,"compare sets 4vwx05.xls")
+excel_sheets(path.stn)
 
-# For each TEL comparative tow, find the nearest NED tow
-data.TEL <- data.set %>% 
-    filter(vessel == "TEL", type == 5) %>%
-    mutate(X=lon, Y=lat) %>% 
-    `attr<-`("projection", "LL") %>%
-    `attr<-`("zone", 19) %>%
-    PBSmapping::convUL()
-data.NED <- data.set %>% 
-    filter(vessel == "NED") %>%
-    mutate(X=lon, Y=lat) %>% 
-    `attr<-`("projection", "LL") %>%
-    `attr<-`("zone", 19) %>%
-    PBSmapping::convUL()
-
-# pair: within 1km
-tmp.dist <- RANN::nn2(data.NED[, c("X","Y")], data.TEL[c("X","Y")], 1) 
-
-data.paired <- bind_rows(
-    data.TEL %>%
-        mutate(station = row_number(),
-               dist = tmp.dist$nn.dists[,1],
-               trip = factor(mission, labels = c(1:4), levels = c("TEL2005545","TEL2005605","TEL2005633","TEL2006614"))),
-    data.NED[tmp.dist$nn.idx,] %>% 
-        mutate(station = row_number(),
-               dist = tmp.dist$nn.dists[,1],
-               trip = factor(mission, labels = c(1:4), levels = c("NED2005001","NED2005027","NED2005034","NED2006001"))))%>%
-    mutate(filter.dist = dist < 2) %>% # side by side within 2km
-    mutate(trip = as.integer(trip)) %>% 
+data.set.p1 <- bind_rows(
+    read_excel(
+        path.stn,
+        sheet = "ned num",
+        range = cell_limits(c(3,1),c(NA,5)),
+        col_names = c("mission","station","strat","id","setno"),
+        col_types = c("text","numeric","text","numeric","numeric")),
+    read_excel(
+        path.stn,
+        sheet = "tel num",
+        range = cell_limits(c(3,1),c(NA,5)),
+        col_names = c("mission","strat","station","id","setno"),
+        col_types = c("text","text","numeric","numeric","numeric"))
+) %>%
+    select(-strat,-id) %>%
+    filter(!is.na(station),!is.na(mission),!is.na(setno)) %>%
+    inner_join(data.set, by = c("mission","setno")) %>%
     group_by(station) %>%
-    mutate(filter.trip = all(trip == mean(trip))) %>%
-    ungroup # trips are paired
+    filter(n() == 2) %>%
+    ungroup() %>% # filter paired station
+    mutate(station = as.integer(station),
+           setno = as.integer(setno))
 
-# check setno: one special trip
-data.paired %>% 
-    filter(filter.dist,filter.trip) %>%
-    transmute(station, mission, setno) %>%
-    spread(mission, setno) %>%
-    print(n = Inf)
 
-# check strat: four pairs have different strat
-data.paired %>% 
-    filter(filter.dist,filter.trip) %>%
-    transmute(station, vessel, strat) %>%
-    spread(vessel, strat) %>%
-    filter(NED!=TEL) %>%
-    left_join(data.paired) %>% 
-    select(-gear,-type,-filter.dist,-filter.trip,-NED,-TEL)
+range(data.set.p1$station)
 
-# chech map: different colors for various filtering conditions
-library(maps)
-library(ggplot2)
-base_map <- ggplot() +
-    borders("world", colour="gray50", fill = "gray90", xlim = c(-70,-56), ylim = c(40, 48)) +
-    coord_fixed(ratio = 1.2, xlim = c(-70,-56), ylim = c(40, 48)) +
-    theme_bw() +
-    theme(
-        axis.title = element_blank(),
-        legend.position = "bottom"
-    )
-
-base_map +
-    geom_point(data=data.set, aes(lon, lat, color = vessel), shape = 21) +
-    geom_point(data=data.paired %>% filter(filter.dist,filter.trip), aes(lon, lat), shape = 19, size = 0.2) +
-    geom_point(data=data.paired %>% filter(!filter.dist), aes(lon, lat), shape = 3, color = "blue") +
-    geom_point(data=data.paired %>% filter(!filter.trip), aes(lon, lat), shape = 4, color = "yellow") +
-    theme_bw()
-ggsave(filename = "data_description/NED2005/paired_NED2005_map.jpg", width = 12, height = 8, dpi = 600)
-
+# ----------------------------------------------------------
+# Update: pair "TEL2005633","NED2005034" by setno
+data.set.p2 <-
+    data.set %>% 
+    filter(mission %in% c("TEL2005633","NED2005034")) %>%
+    group_by(setno) %>%
+    filter(n() == 2) %>%
+    ungroup() %>% # filter paired setno
+    mutate(station = as.integer(setno + 1000)) # assign station number
+    
 
 # ---------------------------------------------------
 # Details table: catch at lengh
@@ -148,10 +122,10 @@ data.catch <- map_df(
 
 
 # ---------------------------------------------------
-# combine tables
-d.length <- data.paired %>%
-    filter(filter.dist,filter.trip) %>%
-    select(mission, setno, station, depth, lon, lat, vessel) %>%
+# Combine the three paired trips
+# Then combine tables
+
+d.length <- bind_rows(data.set.p1, data.set.p2) %>%
     inner_join(data.detail, by = c("mission", "setno")) %>%
     left_join(data.catch, by = "species") %>%
     as.data.frame()
@@ -159,6 +133,65 @@ d.length <- data.paired %>%
 
 save(file = "data-NED2005.RData", d.length)
 
+
+
+# chech map: different colors for various filtering conditions
+library(maps)
+library(ggplot2)
+base_map <- ggplot() +
+    borders("world", colour="gray50", fill = "gray90", xlim = c(-70,-56), ylim = c(40, 48)) +
+    coord_fixed(ratio = 1.2, xlim = c(-70,-56), ylim = c(40, 48)) +
+    theme_bw() +
+    theme(
+        axis.title = element_blank(),
+        legend.position = "bottom"
+    )
+
+# color by mission
+base_map +
+    geom_point(data=data.set, aes(lon, lat, color = mission)) +
+    theme_bw()
+ggsave(filename = "data_description/NED2005/mission_map_NED2005.jpg", width = 12, height = 8, dpi = 600)
+
+# successful pairs
+base_map +
+    geom_point(data=data.set, aes(lon, lat, color = vessel), shape = 21) +
+    geom_point(data=data.set.p1, aes(lon, lat), shape = 3) +
+    geom_point(data=data.set.p2, aes(lon, lat), shape = 4) +
+    theme_bw() +
+    ggtitle(paste0("Successful Pairs = ", n_distinct(d.length$station)))
+ggsave(filename = "data_description/NED2005/paired_NED2005_map.jpg", width = 12, height = 8, dpi = 600)
+
+
+# check distanceL: one pair are 4km apart
+x <- bind_rows(data.set.p1, data.set.p2)
+
+y <- x %>% 
+    mutate(X=lon, Y=lat) %>% 
+    `attr<-`("projection", "LL") %>%
+    `attr<-`("zone", 19) %>%
+    PBSmapping::convUL() %>%
+    group_by(station) %>%
+    summarise(dist = sqrt(diff(X)^2 + diff(Y)^2)) 
+
+y %>%
+    filter(dist >2)%>%
+    left_join(x) %>% 
+    select(-gear,-type)
+
+ggplot(y) +
+    geom_histogram(aes(dist), fill = "white", color = "gray") +
+    theme_bw()
+ggsave(filename = "data_description/NED2005/paired_NED2005_distance_hist.jpg", width = 8, height = 8, dpi = 300)
+
+
+# check strat: four pairs have different strat
+x %>% 
+    transmute(station, vessel, strat) %>%
+    spread(vessel, strat) %>%
+    filter(NED!=TEL) %>%
+    left_join(x) %>% 
+    select(-gear,-type,-NED,-TEL)
 
 
 # ----------------------------------------------------
@@ -249,9 +282,5 @@ p <- d.length %>%
     ylim(c(0,80))
 ggsave(filename = paste0("data_description/NED2005/paired_catch_spectrum-species_",i.species,".pdf"),
        plot = p, width = 15, height = 10)
-
-
-
-
 
 
