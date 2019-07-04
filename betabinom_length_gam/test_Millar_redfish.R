@@ -1,5 +1,5 @@
 # #########################################
-# Validate my model with Tim's model
+# Validate/compare my model with Tim's model
 # using redfish data from Tim
 # #########################################
 

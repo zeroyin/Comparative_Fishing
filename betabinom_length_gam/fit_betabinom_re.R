@@ -5,13 +5,13 @@
 # #########################################
 
 rm(list = ls())
-setwd("C:/Users/yinyi/Dropbox/BIO/Comparative_Fishing/Workspace/test_size_gam/")
+setwd("C:/Users/yinyi/Dropbox/BIO/Comparative_Fishing/Workspace/betabinom_length_gam/")
 
 library(dplyr)
 library(tidyr)
 library(ggplot2)
 
-load("data-NED2013.RData")
+load("../read_data/data-NED2013.RData")
 
 # organize data for model
 
