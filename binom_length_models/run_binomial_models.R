@@ -6,13 +6,13 @@
 
 
 rm(list = ls())
-setwd("C:/Users/yinyi/Dropbox/BIO/Comparative_Fishing/Workspace/test_size_gam/")
+setwd("C:/Users/yinyi/Dropbox/BIO/Comparative_Fishing/Workspace/binom_length_models/")
 
 library(dplyr)
 library(tidyr)
 library(ggplot2)
 
-load("data-NED2005.RData")
+load("../read_data/data-NED2005.RData")
 
 # ------------------------------------------------
 # organize data for model
@@ -70,7 +70,7 @@ eigende <- eigen(cs$S[[1]])
 
 # run TMB model
 library(TMB)
-version <- "test_betabinom_re"
+version <- "test_betabinom_re_v2"
 compile(paste0(version,".cpp"))
 dyn.load(dynlib(version))
 
@@ -86,14 +86,7 @@ data = list(
     Xr = cs$X %*% eigende$vectors[,1:n_r],
     d = eigende$value[1:n_r]
 )
-
-
-# ------------------------------------------------
-# run a suite of models
-# ------------------------------------------------
-
-# 
-parameters1 = list(
+parameters = list(
     beta = rep(0, n_f),
     b = rep(0, n_r),
     gamma = rep(0, n_f),
@@ -105,17 +98,148 @@ parameters1 = list(
     log_s_epsilon = log(10),
     chol_delta = c(1,0,1) # use chol decomp in vector form
 )
-map1 <- list(
+
+# ------------------------------------------------
+# run a suite of models
+# ------------------------------------------------
+
+# function to run model given mapped "obj"
+run_model <- function(model, obj){
+    opt <- nlminb(obj$par,obj$fn,obj$gr)
+    if(exists("opt")){
+        if(!opt$convergence){
+            rep <- sdreport(obj)
+            res <- list(obj = obj, opt = opt, rep = rep)
+            save(res, file = paste0("res-",model,".rda"))
+            
+            # estimate and std of mu and phi and rho
+            est <- summary(rep, "report")[,"Estimate"]
+            std <-  summary(rep, "report")[,"Std. Error"]
+            est.mean_mu <- est[names(est) == "mean_mu"]
+            std.mean_mu <- std[names(std) == "mean_mu"]
+            est.mean_phi <- est[names(est) == "mean_phi"]
+            std.mean_phi <- std[names(std) == "mean_phi"]
+            est.mean_log_rho <- est[names(est) == "mean_log_rho"]
+            std.mean_log_rho <- std[names(std) == "mean_log_rho"]
+            
+            jpeg(paste(sep = "-",model,"estimates","species",i.species,"lenbin",b.len,"CI95_zscore.jpg"),
+                 res = 300, width = 6, height = 10, units = "in")
+            par(mfrow=c(3,1))
+            plot(lenseq, est.mean_mu, ylim = c(0,1), type = "l")
+            for(i in 1:nstation){lines(lenseq, obj$report()$mu[i,], col = "gray")}
+            lines(lenseq, est.mean_mu + 1.96*std.mean_mu, col = "blue", lty = "dashed")
+            lines(lenseq, est.mean_mu - 1.96*std.mean_mu, col = "blue", lty = "dashed")
+            plot(lenseq, est.mean_phi, type = "l")
+            plot(lenseq, est.mean_log_rho, ylim = c(-4,4), type = "l")
+            abline(a = 0, b = 0, col = "red")
+            for(i in 1:nstation){lines(lenseq, obj$report()$eta_mu[i,], col = "gray")}
+            lines(lenseq, est.mean_log_rho + std.mean_log_rho, col = "blue", lty = "dashed")
+            lines(lenseq, est.mean_log_rho - std.mean_log_rho, col = "blue", lty = "dashed")
+            dev.off()
+        }
+    }
+}
+
+
+
+# BB2
+rm("map","obj","opt","rep")
+map = list(
+    delta = factor(matrix(NA, nstation, n_f)),
+    epsilon = factor(matrix(NA, nstation, n_r)),
+    g = factor(rep(NA,n_r)),
+    log_s_g = factor(NA),
+    log_s_epsilon = factor(NA),
     chol_delta = factor(rep(NA,3))
 )
+obj = MakeADFun(data=data,
+                parameters=parameters,
+                map = map,
+                DLL=version,
+                random = c("b", "g", "delta", "epsilon"),
+                silent = F)
+run_model("BB2", obj)
 
-obj1 = MakeADFun(data=data,
-                 parameters=parameters1,
-                 map = map1,
-                 DLL=version,
-                 random = c("b", "g", "delta", "epsilon"),
-                 silent = F)
-opt1 <- nlminb(obj1$par,obj1$fn,obj1$gr)
 
 
+# BB3
+rm("map","obj","opt","rep")
+map = list(
+    delta = factor(matrix(NA, nstation, n_f)),
+    epsilon = factor(matrix(NA, nstation, n_r)),
+    log_s_epsilon = factor(NA),
+    chol_delta = factor(rep(NA,3))
+)
+obj = MakeADFun(data=data,
+                parameters=parameters,
+                map = map,
+                DLL=version,
+                random = c("b", "g", "delta", "epsilon"),
+                silent = F)
+run_model("BB3", obj)
+
+
+
+
+# BB4
+rm("map","obj","opt","rep")
+map = list(
+    epsilon = factor(matrix(NA, nstation, n_r)),
+    g = factor(rep(NA,n_r)),
+    log_s_g = factor(NA),
+    log_s_epsilon = factor(NA),
+)
+obj = MakeADFun(data=data,
+                parameters=parameters,
+                map = map,
+                DLL=version,
+                random = c("b", "g", "delta", "epsilon"),
+                silent = F)
+run_model("BB4", obj)
+
+
+
+
+# BB5
+rm("map","obj","opt","rep")
+map = list(
+    epsilon = factor(matrix(NA, nstation, n_r)),
+    log_s_epsilon = factor(NA)
+)
+obj = MakeADFun(data=data,
+                parameters=parameters,
+                map = map,
+                DLL=version,
+                random = c("b", "g", "delta", "epsilon"),
+                silent = F)
+run_model("BB5", obj)
+
+
+
+# BB6
+rm("map","obj","opt","rep")
+map <- list(
+    g = factor(rep(NA,n_r)),
+    log_s_g = factor(NA)
+)
+obj = MakeADFun(data=data,
+                parameters=parameters,
+                map = map,
+                DLL=version,
+                random = c("b", "g", "delta", "epsilon"),
+                silent = F)
+run_model("BB6", obj)
+
+
+
+# BB7
+rm("map","obj","opt","rep")
+map <- list()
+obj = MakeADFun(data=data,
+                parameters=parameters,
+                map = map,
+                DLL=version,
+                random = c("b", "g", "delta", "epsilon"),
+                silent = F)
+run_model("BB7", obj)
 
