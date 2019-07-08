@@ -40,14 +40,18 @@ Type objective_function<Type>::operator() () {
 	// parameters:
 	PARAMETER_VECTOR(beta); // coeff for fixed effect for mu
 	PARAMETER_VECTOR(b); // coeff for random effect for mu
+	PARAMETER(log_s_b); // smooth term for b
 	PARAMETER_VECTOR(gamma); // coeff for fixed effect for phi
 	PARAMETER_VECTOR(g); // coeff for random effect for phi
-	PARAMETER_MATRIX(delta); // overdispersion for beta
-	PARAMETER_MATRIX(epsilon); // overdispersion for b
-	PARAMETER(log_s_b); // smooth term for b
 	PARAMETER(log_s_g); // smooth term for g
-	PARAMETER(log_s_epsilon); // smooth term for epsilon
+	PARAMETER_MATRIX(delta); // overdispersion for beta
 	PARAMETER_VECTOR(chol_delta); // chol decomposition and vectorized cov matrix for delta
+	PARAMETER_MATRIX(epsilon); // overdispersion for b
+	PARAMETER(log_s_epsilon); // smooth term for epsilon
+	PARAMETER(beta_0);
+    PARAMETER(gamma_0);
+    PARAMETER_VECTOR(delta_0);
+    PARAMETER(log_sigma_delta_0);
 
 	// transformation
 	const int n_len = A.cols(); // number of length bins
@@ -75,7 +79,7 @@ Type objective_function<Type>::operator() () {
 
 
 	// set up objective fn components: negative log likelihood
-	vector<Type> nll(5); nll.setZero(); // initialize
+	vector<Type> nll(6); nll.setZero(); // initialize
 
 	// random effects with smooth penalty
 	for(int i_r = 0; i_r < n_r; i_r++){
@@ -90,6 +94,7 @@ Type objective_function<Type>::operator() () {
 		vector<Type> tmp_epsilon = epsilon.row(i_s);
 		nll(3) -= sum(dnorm(tmp_epsilon, Type(0), d/s_epsilon, true));
 	}
+	nll(4) -= sum(dnorm(delta_0, Type(0), exp(log_sigma_delta_0), true));
 
 	// Observation likelihood
 	matrix<Type> eta_mu(n_s, n_len); eta_mu.setZero();
@@ -97,9 +102,12 @@ Type objective_function<Type>::operator() () {
 	matrix<Type> mu(n_s, n_len);
 	matrix<Type> phi(n_s, n_len);
 	matrix<Type> rho(n_s, n_len);
+
 	for(int i_s = 0; i_s < n_s; i_s++){
 		for(int i_len = 0; i_len < n_len; i_len++){
 			// linear predictors
+			eta_mu(i_s, i_len) += beta_0 + delta_0(i_s);
+			eta_phi(i_s, i_len) += gamma_0;
 			for(int i_f = 0; i_f < n_f; i_f++){
 				eta_mu(i_s, i_len) += Xf(i_len, i_f) * (beta(i_f) + delta(i_s, i_f));
 				eta_phi(i_s, i_len) += Xf(i_len, i_f) * gamma(i_f);
@@ -123,7 +131,7 @@ Type objective_function<Type>::operator() () {
 			Type s2 = (Type(1)-mu(i_s, i_len))*phi(i_s, i_len); // phi(i) / mu(i);
 
 			// observation likelihood
-			nll(4) -= dbetabinom(A(i_s, i_len), s1, s2, N(i_s, i_len), true);
+			nll(5) -= dbetabinom(A(i_s, i_len), s1, s2, N(i_s, i_len), true);
 		}
 	}
 
@@ -136,10 +144,10 @@ Type objective_function<Type>::operator() () {
 	vector<Type> mean_log_rho = eta_mu.colwise().sum()/eta_mu.rows(); // use log rho
 	ADREPORT(mean_log_rho);
 
-	// sdreport
-	ADREPORT(mu);
-	ADREPORT(phi);
-	ADREPORT(rho);
+	// // sdreport
+	// ADREPORT(mu);
+	// ADREPORT(phi);
+	// ADREPORT(rho);
 
 	// report
 	REPORT(mu);
