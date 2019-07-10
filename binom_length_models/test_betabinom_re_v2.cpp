@@ -36,6 +36,7 @@ Type objective_function<Type>::operator() () {
 	DATA_MATRIX(Xf); // design matrix for fixed effect of mu, phi
 	DATA_MATRIX(Xr); // design matrix for random effect of mu, phi
 	DATA_VECTOR(d); // positive eigenvalues of penalty matrix S
+	DATA_INTEGER(idist); // distribution type: BI 0; BB 1.
 
 	// parameters:
 	PARAMETER_VECTOR(beta); // coeff for fixed effect for mu
@@ -79,7 +80,7 @@ Type objective_function<Type>::operator() () {
 
 
 	// set up objective fn components: negative log likelihood
-	vector<Type> nll(6); nll.setZero(); // initialize
+	vector<Type> nll(7); nll.setZero(); // initialize
 
 	// random effects with smooth penalty
 	for(int i_r = 0; i_r < n_r; i_r++){
@@ -131,7 +132,10 @@ Type objective_function<Type>::operator() () {
 			Type s2 = (Type(1)-mu(i_s, i_len))*phi(i_s, i_len); // phi(i) / mu(i);
 
 			// observation likelihood
-			nll(5) -= dbetabinom(A(i_s, i_len), s1, s2, N(i_s, i_len), true);
+			switch(idist){
+				case 0: nll(5) -= dbinom(A(i_s, i_len), N(i_s, i_len), mu(i_s, i_len), true);
+				case 1: nll(6) -= dbetabinom(A(i_s, i_len), s1, s2, N(i_s, i_len), true);
+			}
 		}
 	}
 
@@ -163,9 +167,10 @@ Type objective_function<Type>::operator() () {
 	REPORT(epsilon);
 	REPORT(C_delta);
 
-	// sum up nll as joint nll
+	// sum up nll as joint nll: 
+	// computation is sacrificed for code readability  
 	Type jnll = nll.sum();
-	
+
 	// report for diagnostics
 	REPORT(nll);
 	REPORT(jnll);

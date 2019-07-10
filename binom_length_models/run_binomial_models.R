@@ -65,12 +65,13 @@ fit_model <- function(i.model, i.species, b.len = 1, d.length){
     nlen = length(lenseq)
     nstation = nlevels(d$station)
     data = list(
-        A = d %>% filter(vessel == "NED") %>% spread(len, catch) %>% select(-station, -vessel) %>% as.matrix(),
-        B = d %>% filter(vessel == "TEL") %>% spread(len, catch) %>% select(-station, -vessel) %>% as.matrix(),
+        A = d %>% filter(vessel == levels(vessel)[1]) %>% spread(len, catch) %>% select(-station, -vessel) %>% as.matrix(),
+        B = d %>% filter(vessel == levels(vessel)[2]) %>% spread(len, catch) %>% select(-station, -vessel) %>% as.matrix(),
         offset = outer(d.offset$offset,rep(1,length(lenseq))),
         Xf = cs$X %*% eigende$vectors[,1:n_f+n_r],
         Xr = cs$X %*% eigende$vectors[,1:n_r],
-        d = eigende$value[1:n_r]
+        d = eigende$value[1:n_r],
+        idist = switch(substr(i.model, 1, 2), "BI"=0, "BB"=1)
     )
     parameters = list(
         beta = rep(0, n_f),
@@ -178,6 +179,72 @@ fit_model <- function(i.model, i.species, b.len = 1, d.length){
             delta_0 = factor(rep(NA, nstation)),
             log_sigma_delta_0 = factor(NA)
         )
+    }else if(i.model == "BI4"){
+        map = list(
+            gamma = factor(rep(NA, n_f)),
+            g = factor(rep(NA, n_r)),
+            log_s_g = factor(NA),
+            beta_0 = factor(NA),
+            delta_0 = factor(rep(NA, nstation)),
+            log_sigma_delta_0 = factor(NA),
+            gamma_0 = factor(NA)
+        )
+    }else if(i.model == "BI3"){
+        map = list(
+            gamma = factor(rep(NA, n_f)),
+            g = factor(rep(NA, n_r)),
+            log_s_g = factor(NA),
+            delta = factor(matrix(NA, nstation, n_f)),
+            chol_delta = factor(c(NA,NA,NA)),
+            epsilon = factor(matrix(NA, nstation, n_r)),
+            log_s_epsilon = factor(NA),
+            beta_0 = factor(NA),
+            gamma_0 = factor(NA)
+        )
+    }else if(i.model == "BI2"){
+        map = list(
+            gamma = factor(rep(NA, n_f)),
+            g = factor(rep(NA, n_r)),
+            log_s_g = factor(NA),
+            delta = factor(matrix(NA, nstation, n_f)),
+            chol_delta = factor(c(NA,NA,NA)),
+            epsilon = factor(matrix(NA, nstation, n_r)),
+            log_s_epsilon = factor(NA),
+            beta_0 = factor(NA),
+            delta_0 = factor(rep(NA, nstation)),
+            log_sigma_delta_0 = factor(NA),
+            gamma_0 = factor(NA)
+        )
+    }else if(i.model == "BI1"){
+        map = list(
+            beta = factor(rep(NA, n_f)),
+            b = factor(rep(NA, n_r)),
+            log_s_b = factor(NA),
+            gamma = factor(rep(NA, n_f)),
+            g = factor(rep(NA, n_r)),
+            log_s_g = factor(NA),
+            delta = factor(matrix(NA, nstation, n_f)),
+            chol_delta = factor(c(NA,NA,NA)),
+            epsilon = factor(matrix(NA, nstation, n_r)),
+            log_s_epsilon = factor(NA),
+            gamma_0 = factor(NA)
+        )
+    }else if(i.model == "BI0"){
+        map = list(
+            beta = factor(rep(NA, n_f)),
+            b = factor(rep(NA, n_r)),
+            log_s_b = factor(NA),
+            gamma = factor(rep(NA, n_f)),
+            g = factor(rep(NA, n_r)),
+            log_s_g = factor(NA),
+            delta = factor(matrix(NA, nstation, n_f)),
+            chol_delta = factor(c(NA,NA,NA)),
+            epsilon = factor(matrix(NA, nstation, n_r)),
+            log_s_epsilon = factor(NA),
+            gamma_0 = factor(NA),
+            delta_0 = factor(rep(NA, nstation)),
+            log_sigma_delta_0 = factor(NA)
+        )
     }
     
     obj = MakeADFun(data=data,
@@ -232,7 +299,7 @@ fit_model <- function(i.model, i.species, b.len = 1, d.length){
 # ---------------------------------------------------------
 
 species_vec <- c(10, 11, 23, 14, 201, 204)
-model_vec <- paste0("BB", 0:7)
+model_vec <- c(paste0("BB", 0:7),paste0("BI", 0:4))
 for(i.species in species_vec){
     for(i.model in model_vec){
         rm("res","obj","opt","rep")
@@ -241,20 +308,34 @@ for(i.species in species_vec){
 }
 
 
-# AIC
-
+# AIC table
+species_vec <- c(10, 11, 23, 14, 201, 204)
+model_vec <- c(paste0("BB", 0:7),paste0("BI", 0:4))
 aic_mat <- matrix(NA, length(species_vec), length(model_vec), dimnames = list(species_vec, model_vec))
 for(i.species in 1:length(species_vec)){
     for(i.model in 1:length(model_vec)){
         res_file <- paste0("res/", species_vec[i.species], "-",model_vec[i.model],".rda")
         if(file.exists(res_file)){
             load(res_file)
-            aic_mat[i.species, i.model] <- 2*switch(model_vec[i.model],"BB3"=6,"BB5"=7,"BB7"=10) + 2*res$opt$objective
+            if(all(abs(res$obj$gr())<0.1) & all(eigen(optimHess(par=res$opt$par, fn=res$obj$fn, gr=res$obj$gr))$values>=0)){              
+                nllind<- switch(
+                    model_vec[i.model],
+                    "BI0"=7,"BI1"=c(7,5),"BI2"=c(7,1),"BI3"=c(7,1,5),"BI4"=c(7,1,3,4),
+                    "BB0"=6,"BB1"=c(6,5),"BB2"=c(6,1),"BB3"=c(6,1,2),"BB4"=c(6,1,5),"BB5"=c(6,1,2,5),"BB6"=c(6,1,3,4),"BB7"=c(6,1,2,3,4)
+                )
+                df <- switch(
+                    model_vec[i.model],
+                    "BI0"=1,"BI1"=2,"BI2"=3,"BI3"=4,"BI4"=7,
+                    "BB0"=2,"BB1"=3,"BB2"=4,"BB3"=6,"BB4"=5,"BB5"=7,"BB6"=8,"BB7"=10
+                )
+                aic_mat[i.species, i.model] <- 2*sum(res$obj$report()$nll[nllind]) + 2*df
+            }
             rm("res", "res_file")
         }
     }
 }
 
+aic_mat - apply(aic_mat, MARGIN = 1, FUN = function(x) min(x, na.rm = T))
 
-
+aic_mat
 
