@@ -5,7 +5,7 @@
 # #############################################
 
 rm(list = ls())
-setwd("C:/Users/yinyi/Dropbox/BIO/Comparative_Fishing/Workspace/test_size_gam/")
+setwd("C:/Users/yinyi/Dropbox/BIO/Comparative_Fishing/Workspace/read_data/")
 
 library(dplyr)
 library(tidyr)
@@ -126,6 +126,9 @@ data.catch <- map_df(
 # Then combine tables
 
 d.length <- bind_rows(data.set.p1, data.set.p2) %>%
+    group_by(station) %>%
+    mutate(strat = min(strat)) %>%
+    ungroup() %>% # uniform strat for same pair
     inner_join(data.detail, by = c("mission", "setno")) %>%
     left_join(data.catch, by = "species") %>%
     filter(station!=1014) %>% # additional exclusions suggested by Don
@@ -224,8 +227,8 @@ ggsave(filename = "data_description/NED2005/catch_compare_by_len_species-all_spe
 p <- d.length %>% 
     mutate(species = paste(species,name,sep = "-")) %>%
     select(species, station, vessel, len, catch) %>%
-    spread(as.integer(vessel), catch, fill = NA) %>%
-    mutate(mu = TEL/(TEL+NED)) %>%
+    spread(as.integer(vessel), catch, fill = 0) %>%
+    mutate(mu = NED/(TEL+NED)) %>%
     ggplot(aes(len, mu, group = station)) +
     geom_line(color = "gray") +
     geom_point(size = 0.1) +
@@ -241,8 +244,8 @@ ggsave(filename = "data_description/NED2005/sample_mu-all_species.pdf",
 p <- d.length %>% 
     mutate(species = paste(species,name,sep = "-")) %>%
     select(species, station, vessel, len, catch) %>%
-    spread(vessel, catch, fill = NA) %>%
-    mutate(ratio = TEL/NED) %>%
+    spread(vessel, catch, fill = 0) %>%
+    mutate(ratio = NED/TEL) %>%
     ggplot(aes(len, log10(ratio), group = station)) +
     geom_line(color = "gray") +
     geom_point(size = 0.1) +
@@ -255,7 +258,7 @@ ggsave(filename = "data_description/NED2005/sample_log10_rho-all_species.pdf",
 
 
 # select species
-i.species <- 11
+i.species <- 10
 
 # paired catch
 p <- d.length %>% 
@@ -276,12 +279,26 @@ p <- d.length %>%
     filter(species == i.species) %>%
     ggplot() +
     geom_tile(aes(as.factor(station), len, fill = catch)) +
-    scale_fill_continuous(low = "white", high = "red", trans = "log10", na.value = "white") +
+    scale_fill_continuous(low = "gray", high = "black", na.value = "white", trans = "log10") +
     facet_wrap(~vessel, nrow = 2) +
     theme_bw() +
-    theme(axis.text.x = element_text(angle = 90)) +
-    ylim(c(0,80))
+    theme(axis.text.x = element_text(angle = 90))
 ggsave(filename = paste0("data_description/NED2005/paired_catch_spectrum-species_",i.species,".pdf"),
        plot = p, width = 15, height = 10)
+
+
+
+# -----------------------------------------------
+# Group by strata/depth
+# -----------------------------------------------
+
+
+d.length %>%
+    ggplot(aes(x = strat, y = depth)) +
+    geom_boxplot(width = 0.5, fill = "white", ) +
+    geom_jitter(aes(color = vessel), width = 0.1, size = 0.1) +
+    theme_bw()
+
+
 
 

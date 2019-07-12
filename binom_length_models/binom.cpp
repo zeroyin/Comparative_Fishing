@@ -1,4 +1,5 @@
-// test betabinomial model, length GAM, with random effects
+// various binomial models
+// various smoothing assumptions
 
 #include <TMB.hpp>
 
@@ -22,6 +23,22 @@ Type dbetabinom(Type y, Type s1, Type s2, Type n, int give_log=0)
 	else return logres;
 }
 
+template<class Type>
+// prob of at least one vessel has pos catch: p 
+// should include stations where both catch zero?
+Type dzerobinom(Type y, Type n, Type mu, Type p, int give_log=0)
+{
+	Type logres = 0;
+	if(y == 0){
+		logres = log((1 - p)/2);
+	}else if(y == n){
+		logres = log((1 - p)/2);
+	}else{
+		logres = log(p) + dbinom(y, n, mu, true);
+	}
+	if(!give_log) return exp(logres);
+	else return logres;
+}
 
 template<class Type>
 Type objective_function<Type>::operator() () {
@@ -49,16 +66,20 @@ Type objective_function<Type>::operator() () {
 	PARAMETER_VECTOR(chol_delta); // chol decomposition and vectorized cov matrix for delta
 	PARAMETER_MATRIX(epsilon); // overdispersion for b
 	PARAMETER(log_s_epsilon); // smooth term for epsilon
-	PARAMETER(beta_0);
+	PARAMETER(beta_0); 
     PARAMETER(gamma_0);
     PARAMETER_VECTOR(delta_0);
     PARAMETER(log_sigma_delta_0);
+    PARAMETER_MATRIX(p);
+    PARAMETER(log_p_s1);
+    PARAMETER(log_p_s2);
+
 
 	// transformation
 	const int n_len = A.cols(); // number of length bins
 	const int n_s = A.rows(); // number of stations
-	const int n_f = beta.size();
-	const int n_r = b.size();
+	const int n_f = beta.size(); // default 2
+	const int n_r = b.size(); // default 8
 
 	matrix<Type> N = A + B; // total catch
 
@@ -80,7 +101,8 @@ Type objective_function<Type>::operator() () {
 
 
 	// set up objective fn components: negative log likelihood
-	vector<Type> nll(7); nll.setZero(); // initialize
+	vector<Type> nll(14); nll.setZero(); // initialize
+
 
 	// random effects with smooth penalty
 	for(int i_r = 0; i_r < n_r; i_r++){
@@ -95,7 +117,15 @@ Type objective_function<Type>::operator() () {
 		vector<Type> tmp_epsilon = epsilon.row(i_s);
 		nll(3) -= sum(dnorm(tmp_epsilon, Type(0), d/s_epsilon, true));
 	}
+	// option for delta_0
 	nll(4) -= sum(dnorm(delta_0, Type(0), exp(log_sigma_delta_0), true));
+	// option for ZB
+	for (int i_s = 0; i_s < n_s; i_s++){
+		for (int i_len = 0; i_len < n_len; i_len++){
+			nll(5) -= dbeta(p(i_s,i_len), exp(log_p_s1), exp(log_p_s2), true);
+		}
+	}
+
 
 	// Observation likelihood
 	matrix<Type> eta_mu(n_s, n_len); eta_mu.setZero();
@@ -117,24 +147,23 @@ Type objective_function<Type>::operator() () {
 				eta_mu(i_s, i_len) += Xr(i_len, i_r) * (b(i_r) + epsilon(i_s, i_r));
 				eta_phi(i_s, i_len) += Xr(i_len, i_r) * g(i_r);
 			}
-
 			// link function
 			mu(i_s, i_len) = invlogit(eta_mu(i_s, i_len) + offset(i_s, i_len));
 			phi(i_s, i_len) = exp(eta_phi(i_s, i_len));
-
 			// conversion rate calculation alternative: 
 			rho(i_s, i_len) = exp(eta_mu(i_s, i_len));
-			// conversion rate derived from proportion:
-			// rho(i_s, i_len) = mu(i_s, i_len)/(Type(1)-mu(i_s, i_len))*exp(-offset(i_s, i_len));
 
-			// transformation to shape parameter
-			Type s1 = mu(i_s, i_len)*phi(i_s, i_len); // s1 = mu(i) * mu(i) / phi(i);
-			Type s2 = (Type(1)-mu(i_s, i_len))*phi(i_s, i_len); // phi(i) / mu(i);
+			// transformation to BB shape parameter
+				Type s1 = mu(i_s, i_len)*phi(i_s, i_len);
+				Type s2 = (Type(1)-mu(i_s, i_len))*phi(i_s, i_len);
 
-			// observation likelihood
-			switch(idist){
-				case 0: nll(5) -= dbinom(A(i_s, i_len), N(i_s, i_len), mu(i_s, i_len), true);
-				case 1: nll(6) -= dbetabinom(A(i_s, i_len), s1, s2, N(i_s, i_len), true);
+			// observation likelihood: unsuccessful using switch statement
+			if(idist == 0){
+				nll(10) -= dbinom(A(i_s, i_len), N(i_s, i_len), mu(i_s, i_len), true);
+			}else if(idist == 1){
+				nll(11) -= dbetabinom(A(i_s, i_len), s1, s2, N(i_s, i_len), true);
+			}else if(idist == 2){
+				nll(12) -= dzerobinom(A(i_s, i_len), N(i_s, i_len), mu(i_s, i_len), p(i_s, i_len), true);
 			}
 		}
 	}
@@ -166,6 +195,7 @@ Type objective_function<Type>::operator() () {
 	REPORT(delta);
 	REPORT(epsilon);
 	REPORT(C_delta);
+	REPORT(p);
 
 	// sum up nll as joint nll: 
 	// computation is sacrificed for code readability  
