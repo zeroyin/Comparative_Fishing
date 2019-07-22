@@ -13,7 +13,7 @@ load("../read_data/data-NED2005.RData")
 
 # organize data for model
 
-i.species <- 11
+i.species <- 204
 b.len <- 1
 
 d <- d.length %>% 
@@ -117,12 +117,26 @@ obj = MakeADFun(data=data,
                 silent = F)
 opt <- nlminb(obj$par,obj$fn,obj$gr)
 
+i.model <- "GB"
+# check convergence, maximum gradient and positive definite
+if(exists("opt")){
+    if(!opt$convergence){
+        gra <- obj$gr()
+        hes <- eigen(optimHess(par=opt$par, fn=obj$fn, gr=obj$gr))$values
+        if(max(abs(gra)) < 0.1 & min(hes) > -0.1){
+            aic <- 2*sum(obj$report()$nll) + 2*10
+            rep <- try(sdreport(obj))
+            res <- list(obj = obj, opt = opt, aic = aic, gra = gra, hes = hes)
+            save(res, file = paste0("beta-binom-gr/NED2005/", i.species, "-",i.model,".rda"))
+        }
+    }
+}
 
 
 # #################################################
 # Results: report and visualize
 
-rep <- sdreport(obj)
+# rep <- sdreport(obj)
 
 
 # estimate and std of mu and phi and rho
@@ -142,7 +156,7 @@ std.rho <- matrix(std[names(std) == "rho"], nrow = nstation, ncol = nlen)
 
 
 # estimated mu, phi and rho for each station
-jpeg(paste(sep = "-","beta-binom-re/NED2013/estimates","species",i.species,"lenbin",b.len,"CI95_zscore.jpg"),
+jpeg(paste(sep = "-","beta-binom-gr/NED2005/estimates","species",i.species,"lenbin",b.len,"CI95_zscore.jpg"),
      res = 300, width = 6, height = 10, units = "in")
 par(mfrow=c(3,1))
 plot(lenseq, est.mean_mu, ylim = c(0,1), type = "l")
@@ -158,25 +172,13 @@ lines(lenseq, est.mean_log_rho - std.mean_log_rho, col = "blue", lty = "dashed")
 dev.off()
 
 
-# estimated mu with observations for each station
-# CI is for observation
-# jpeg(paste0("beta-binom-re/mu_by_station-species_", i.species, ".jpg"),
-#     res = 300, width = 12, height = 10, units = "in")
-# par(mfrow=c(4,4))
-# for(i in 1:nstation){
-#     plot(lenseq, data$A[i,]/(data$A[i,]+data$B[i,]), ylim = c(0, 1), ylab = "Prop. of Gear 9", main = paste0("Station ", levels(d$station)[i]))
-#     lines(lenseq, est.mu[i,])
-#     lines(lenseq, gamlss.dist::qBB(0.05, mu = est.mu[i,], sigma = obj$report()$phi[i,], bd = 1000)/1000, col = "blue")
-#     lines(lenseq, gamlss.dist::qBB(0.95, mu = est.mu[i,], sigma = obj$report()$phi[i,], bd = 1000)/1000, col = "blue")
-# }
-# dev.off()
 
 
 # estimated mu with observations for each station
 # SD is from TMB sd
-jpeg(paste(sep = "-","beta-binom-re/NED2013/mu_by_station","species",i.species,"lenbin",b.len,"TMB_SD.jpg"),
+jpeg(paste(sep = "-","beta-binom-gr/NED2005/mu_by_station","species",i.species,"lenbin",b.len,"TMB_SD.jpg"),
      res = 300, width = 24, height = 20, units = "in")
-par(mfrow=c(10,8))
+par(mfrow=c(10,10))
 for(i in 1:nstation){
     plot(lenseq, data$A[i,]/(data$A[i,]+data$B[i,]), ylim = c(0, 1), ylab = "Prop. of Gear 9", main = paste0("Station ", levels(d$station)[i]))
     lines(lenseq, est.mu[i,])
@@ -188,9 +190,9 @@ dev.off()
 
 # estimated rho with observations for each station: 
 # calculation of CI: what to do
-jpeg(paste(sep = "-","beta-binom-re/NED2013/rho_by_station","species",i.species,"lenbin",b.len,"TMB_SD.jpg"),
+jpeg(paste(sep = "-","beta-binom-gr/NED2005/rho_by_station","species",i.species,"lenbin",b.len,"TMB_SD.jpg"),
      res = 300, width = 24, height = 20, units = "in")
-par(mfrow=c(10,8))
+par(mfrow=c(10,10))
 for(i in 1:nstation){
     plot(lenseq, data$A[i,]/data$B[i,], ylim = range(0, 5), ylab = "Conversion: 9/15", main = paste0("Station ", levels(d$station)[i]))
     lines(lenseq, est.rho[i,])
@@ -202,72 +204,3 @@ dev.off()
 
 
 
-
-
-# ################################################
-# Produce simplified figures for the documentation
-
-# paired catch
-p <- d.length %>% 
-    filter(species == i.species) %>%
-    ggplot()+
-    geom_line(aes(len, catch, group = station), color = "gray") +
-    stat_summary(aes(len, catch), fun.y=median, geom="line", colour="orange") +
-    stat_summary(aes(len, catch), fun.y=mean, geom="line", colour="blue") +
-    facet_wrap(~gear, ncol = 1) +
-    theme_bw() +
-    xlim(range(lenseq)) +
-    scale_y_continuous(trans = "log10")
-ggsave(filename = paste(sep = "-","beta-binom-re/NED2013/pair","species",i.species,"doc.jpg"),
-       plot = p, width = 8, height = 6)
-
-
-
-# estimated mu
-jpeg(paste(sep = "-","beta-binom-re/NED2013/mu","species",i.species,"doc.jpg"),
-     res = 300, width = 8, height = 6, units = "in")
-plot(lenseq, rep(0, length(lenseq)), ylim = c(0,1), type = "l", 
-     xlab = "Length", ylab = "Prob. Gear 9")
-for(i in 1:nstation){lines(lenseq, obj$report()$mu[i,], col = "gray")}
-lines(lenseq, est.mean_mu, col = "blue")
-lines(lenseq, est.mean_mu + 1.96*std.mean_mu, col = "blue", lty = "dashed")
-lines(lenseq, est.mean_mu - 1.96*std.mean_mu, col = "blue", lty = "dashed")
-dev.off()
-
-
-# log rho
-jpeg(paste(sep = "-","beta-binom-re/NED2013/rho","species",i.species,"doc.jpg"),
-     res = 300, width = 8, height = 6, units = "in")
-plot(lenseq, rep(0, length(lenseq)), ylim = c(-3,3), type = "l", 
-     xlab = "Length", ylab = "Log of Conversion")
-for(i in 1:nstation){points(lenseq+0.004*i-0.2, log(data$A[i,]/data$B[i,])-data$offset[i], pch = 19, cex =0.1, col = "darkgray")}
-lines(lenseq, est.mean_log_rho, col = "blue")
-dev.off()
-
-
-# 
-# # mu with sample mean of mu
-# plot(lenseq, est.mean_mu, col = "blue", type = "l", ylim = c(0,1), 
-#      xlab = "Length", ylab = "Prop. Gear 9")
-# for(i in 1:nstation){points(lenseq+0.006*i-0.2, data$A[i,]/(data$A[i,]+data$B[i,]), pch = 19, cex =0.1, col = "darkgray")}
-# x=data$A/(data$A+data$B); x[x==Inf]=NaN; x[x==-Inf]=NaN;
-# points(lenseq, apply(x, 2, function(x) mean(x, na.rm = T)), col = "black", pch = 1)
-# 
-# 
-# # log rho with sample mean of log rho
-# plot(lenseq, rep(0, length(lenseq)), ylim = c(-3,3), type = "l", 
-#      xlab = "Length", ylab = "Log of Conversion")
-# for(i in 1:nstation){points(lenseq+0.006*i-0.2, log(data$B[i,]/data$A[i,])-data$offset[i,], pch = 19, cex =0.1, col = "darkgray")}
-# lines(lenseq, est.mean_log_rho, col = "blue")
-# x=log(data$A/data$B)-data$offset; x[x==Inf]=NaN; x[x==-Inf]=NaN;
-# points(lenseq, apply(x, 2, function(x) mean(x, na.rm = T)), col = "black", pch = 1)
-# 
-# 
-# # rho with sample mean of rho
-# plot(lenseq, rep(1, length(lenseq)), ylim = c(0,6), type = "l", 
-#      xlab = "Length", ylab = "Conversion")
-# for(i in 1:nstation){points(lenseq+0.004*i-0.2, (data$A[i,]/data$B[i,])-data$offset[i,], pch = 19, cex =0.1, col = "darkgray")}
-# lines(lenseq, exp(est.mean_log_rho), col = "blue")
-# x=(data$A/data$B)-data$offset; x[x==Inf]=NaN; x[x==-Inf]=NaN;
-# points(lenseq, apply(x, 2, function(x) median(x, na.rm = T)), col = "black", pch = 1)
-# 

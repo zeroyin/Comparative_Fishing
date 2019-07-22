@@ -6,7 +6,7 @@
 
 
 rm(list = ls())
-setwd("C:/Users/yinyi/Dropbox/BIO/Comparative_Fishing/Workspace/binom_length_models/")
+setwd("C:/Users/yinyi/Dropbox/BIO/Comparative_Fishing/Workspace/length_binom_models/")
 
 library(dplyr)
 library(tidyr)
@@ -400,11 +400,11 @@ for(i.model in model_vec){
 
 # AIC table
 species_vec <- c(10, 11, 23, 14, 201, 204)
-model_vec <- c(paste0("BB", 0:7),paste0("BI", 0:4), paste0("ZB", 2:3))
+model_vec <- c(paste0("BB", 0:7),paste0("BI", 0:4), paste0("ZB", 2:3), "GB")
 aic_mat <- matrix(NA, length(species_vec), length(model_vec), dimnames = list(species_vec, model_vec))
 for(i.species in 1:length(species_vec)){
     for(i.model in 1:length(model_vec)){
-        res_file <- paste0("res/", species_vec[i.species], "-",model_vec[i.model],".rda")
+        res_file <- paste0("NED2005/", species_vec[i.species], "-",model_vec[i.model],".rda")
         if(file.exists(res_file)){
             load(res_file)
             aic_mat[i.species, i.model] <- res$aic
@@ -414,7 +414,7 @@ for(i.species in 1:length(species_vec)){
 }
 
 t(round(aic_mat - apply(aic_mat, MARGIN = 1, FUN = function(x) min(x, na.rm = T)), digits = 0)) %>%
-    write.table(file = "aic_table.txt")
+    write.csv(file = "aic_table.csv")
 
 
 t(aic_mat)
