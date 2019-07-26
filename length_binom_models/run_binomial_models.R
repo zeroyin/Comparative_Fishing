@@ -67,8 +67,8 @@ fit_model <- function(i.model, i.species, b.len = 1, d.length){
     library(mgcv)
     cs <- smooth.construct(
         object = s(len, bs = "cr"),
-        data = d %>% group_by(len) %>% summarise(catch = sum()),
-        knots = NULL
+        data = data.frame(len = seq(min(lenseq)-10,max(lenseq)+10,1)),
+        knots = data.frame(knots = lenseq)
     )
     
     n_f <- 2

@@ -14,7 +14,7 @@ library(ggplot2)
 # ----- Presets -----#
 
 # strata list
-n_strat <- 10
+n_strat <- 20
 strat_list <- seq(1, n_strat)
 
 # station list
@@ -34,7 +34,7 @@ len_list <- seq(11, 10 + n_len, length.out = n_len)
 ## use flat beta disribution
 ## use spatial distribution inferred from survey
 
-dens <- rbeta(n_strat, 8, 5)
+dens <- rbeta(n_strat, 3,5)
 
 # plot
 hist(dens)
@@ -44,13 +44,21 @@ hist(dens)
 ## simulate a smooth curve
 ## use smoothed curve from survey
 
-dens_mat <- matrix(rep(dens, n_len), n_stn, n_len)
+# len_comp <- rep(1,n_len)
+# len_comp <- dbeta(len_list/70,1.8,2)
 
-# len_comp <- dbeta(len_list/70,5,4)
-# dens_mat <- dens %o% len_comp
-
+len_comp <- matrix(NA, n_stn,n_len)
+for(i.stn in 1:n_stn){
+    len_comp[i.stn, ] <- dnorm(seq(-3,3,length.out = n_len),(i.stn-n_stn/2)/4, 0.4 + i.stn/10)
+}
+    
 # plot
-plot(len_list, len_comp, type = "l")
+matplot(len_list, t(len_comp), type = "l")
+
+
+dens_mat <- dens * len_comp
+
+matplot(len_list, t(dens_mat), type = "l")
 
 
 # ----- Gear Catchability -----#
@@ -59,7 +67,8 @@ plot(len_list, len_comp, type = "l")
 ## parametric selectivity models: logistic, lognormal etc
 ## designed selectivity 
 
-s_A <- dlnorm(len_list, meanlog = log(40), sdlog = 0.4)
+s_A <-  dlnorm(len_list, meanlog = log(40), sdlog = 0.3)
+# s_A <-  cos(len_list/10+20)+1
 q_A <- s_A/sum(s_A)
 
 s_B <-  dlnorm(len_list, meanlog = log(30), sdlog = 0.3)
@@ -72,17 +81,22 @@ rho <- q_A/q_B
 matplot(len_list, cbind(q_A, q_B), type = "l", lty = c(1,2), col = "black")
 legend("topleft", lty = c(1,2), legend = c("A", "B"))
 
+
+plot(len_list, q_A/(q_A+q_B), type = "l")
+
 plot(len_list, rho, type = "l")
 
 
 # ----- Catch at Length -----#
 
-# Poisson sampling variation
-area <- 10
+# area for scaling catch numbers
+area <- 1000
 N_A <- N_B <- matrix(NA, n_stn, n_len)
+
+# Poisson sampling variation
 for(i.stn in 1:n_stn){
-    N_A[i.stn,] <- rpois(n = n_len, lambda = q_A*dens_mat[i.stn,]*area)
-    N_B[i.stn,] <- rpois(n = n_len, lambda = q_B*dens_mat[i.stn,]*area)
+    N_A[i.stn,] <- rpois(n = n_len, lambda = q_A*dens_mat[i.stn,]*area*rlnorm(1,-0.18,0.6))
+    N_B[i.stn,] <- rpois(n = n_len, lambda = q_B*dens_mat[i.stn,]*area*rlnorm(1,-0.18,0.6))
 }
 
 # combined catch 
@@ -118,7 +132,10 @@ dev.off()
 
 # load TMB model
 library(TMB)
-dyn.load(dynlib("../length_binom_models/binom"))
+version <- "binom_1"
+compile(paste0(version,".cpp"))
+dyn.load(dynlib(version))
+
 
 
 # function to fit tmb model, given species and model name
@@ -144,8 +161,9 @@ fit_model <- function(i.model, N_A, N_B, lenseq){
     library(mgcv)
     cs <- smooth.construct(
         object = s(len, bs = "cr"),
-        data = cbind(len = len_list, catch = colSums(N)) %>% as.data.frame(),
-        knots = NULL
+        data = cbind(len = seq(1, 70, 1), catch = 2) %>% as.data.frame(),
+        # data = cbind(len = len_list, catch = colSums(N)) %>% as.data.frame(),
+        knots = data.frame(knots = len_list)
     )
     
     n_f <- 2
@@ -168,7 +186,7 @@ fit_model <- function(i.model, N_A, N_B, lenseq){
     parameters = list(
         beta = rep(0, n_f),
         b = rep(0, n_r),
-        log_s_b = log(10),
+        log_s_b = log(0.1),
         gamma = rep(0, n_f),
         g = rep(0, n_r),
         log_s_g = log(10),
@@ -414,13 +432,13 @@ fit_model <- function(i.model, N_A, N_B, lenseq){
     obj = MakeADFun(data=data,
                     parameters=parameters,
                     map = map,
-                    DLL="binom",
+                    DLL=version,
                     random = c("b", "g", "delta", "epsilon", "delta_0", "p"),
                     silent = T)
     opt <- nlminb(obj$par,obj$fn,obj$gr)
     
     # check convergence, maximum gradient and positive definite
-    if(exists("opt")){
+    if(exists("opt")&!opt$convergence){
         gra <- obj$gr()
         hes <- eigen(optimHess(par=opt$par, fn=obj$fn, gr=obj$gr))$values
         if(max(abs(gra)) < 0.1 & min(hes) > -0.1){
@@ -467,11 +485,11 @@ for(i.model in model_vec){
 model_vec <- c(paste0("BB", 0:7),paste0("BI", 0:4),paste0("ZB", 2:3))
 aic_mat <- rep(NA, length(model_vec))
 names(aic_mat) <- model_vec
-for(i.model in 1:length(model_vec)){
-    res_file <- paste0("res/",model_vec[i.model],".rda")
+for(i_model in 1:length(model_vec)){
+    res_file <- paste0("res/",model_vec[i_model],".rda")
     if(file.exists(res_file)){
         load(res_file)
-        aic_mat[i.model] <- res$aic
+        aic_mat[i_model] <- res$aic
         rm("res", "res_file")
     }
 }
