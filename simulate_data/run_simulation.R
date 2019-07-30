@@ -18,7 +18,7 @@ library(ggplot2)
 simu_data <- function(area = 1000){
     
     # station list
-    n_stn <- 10
+    n_stn <- 20
     n_stn_strat <- rep(1, n_stn) # fixed number of stations per stratum
     stn_list <- seq(1, n_stn)
     
@@ -37,10 +37,10 @@ simu_data <- function(area = 1000){
     dens_mat <- dens * len_comp
     
     # Catchability
-    s_A <- cos(len_list/10+20)+1
+    s_A <- len_list/60 * 1.2
     q_A <- s_A/sum(s_A)
     
-    s_B <-  dlnorm(len_list, meanlog = log(30), sdlog = 0.3)
+    s_B <-  len_list/60 * 1.4 + sqrt(len_list/60)
     q_B <- s_B/sum(s_B)
     
     #  true conversion: 
@@ -398,17 +398,17 @@ dyn.load(dynlib(version))
 dir.create("res/output/")
 
 # run repeated simulations
-n_seed <- 10
+n_seed <- 100
 model_vec <- c(paste0("BB", 0:7),paste0("BI", 0:4))
 for(i.seed in 1:n_seed){
     set.seed(i.seed)
     simu <- simu_data(area = 1000)
     save(simu, file = paste0("res/output/data-",i.seed,".rda"))
     for(i.model in model_vec){
-        res <- fit_model(i.model, simu)
-        if(!is.null(res)){
+        res <- try(fit_model(i.model, simu))
+        if(!is.null(res)){if(!inherits(res, "try-error")){
             save(res, file = paste0("res/output/res-",i.seed,"-",i.model,".rda"))
-        }
+        }}
     }
 }
 
@@ -435,6 +435,15 @@ t(round(aic_mat, digits = 0))
 round(aic_mat - apply(aic_mat,1,function(x){min(x,na.rm = T)}), digits = 0) %>%
     write.csv(file = "res/aic_table.csv")
 
+
+aic.summary <- data.frame(
+    nconv = as.integer(apply(aic_mat, 2, function(x){sum(!is.na(x))})),
+    nbest = as.integer(colSums(aic_mat==apply(aic_mat,1,function(x){min(x,na.rm = T)}), na.rm = T)),
+    row.names = model_vec)
+    
+
+xtable::xtable(t(aic.summary))
+           
 
 
 # organize results: est.mu
@@ -465,5 +474,39 @@ for(i.seed in 1:n_seed){
     
     rm("simu")
 }
+
+
+
+load("res/output/data-1.rda")
+len_list <- simu$len_list
+rm("simu")
+resid_mat <- matrix(NA, n_seed, length(len_list))
+for(i.seed in 1:n_seed){
+    aic_mat <- read.csv("res/aic_table.csv")[,-1]
+    dat_file <- paste0("res/output/data-",i.seed, ".rda")
+    res_file <- paste0("res/output/res-",i.seed,"-",model_vec[which.min(aic_mat[i.seed,])],".rda")
+    load(dat_file)
+    load(res_file)
+    resid_mat[i.seed,] <- res$obj$report()$mean_mu - simu$mu
+    rm("simu","res")
+}
+
+
+
+resid_mat %>%
+    as.data.frame() %>%
+    `colnames<-`(len_list) %>%
+    gather() %>%
+    `colnames<-`(c("len","resid")) %>%
+    mutate(len = as.integer(len)) %>%
+    ggplot(aes(x = len, y = resid)) +
+    geom_point( color = "blue", size = 0.2, alpha = 0.2) +
+    geom_hline(yintercept = 0, color = "black") +
+    stat_summary(fun.y = median, geom="point", color = "blue") +
+    theme_bw()
+ggsave(filename = "res/resid_median-100simu.jpg", width = 10, height = 6)
+
+
+
 
 

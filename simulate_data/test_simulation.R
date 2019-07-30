@@ -58,7 +58,7 @@ matplot(len_list, t(len_comp), type = "l")
 
 dens_mat <- dens * len_comp
 
-matplot(len_list, t(dens_mat), type = "l")
+matplot(len_list, t(dens_mat), type = "l", col = "black")
 
 
 # ----- Gear Catchability -----#
@@ -78,14 +78,13 @@ q_B <- s_B/sum(s_B)
 rho <- q_A/q_B
 
 # plot
+jpeg(filename = "res/catchability.jpg", width = 10, height = 8, units = "in", res = 200)
+layout(matrix(c(1,1,2,3), 2, 2, byrow = TRUE))
 matplot(len_list, cbind(q_A, q_B), type = "l", lty = c(1,2), col = "black")
 legend("topleft", lty = c(1,2), legend = c("A", "B"))
-
-
-plot(len_list, q_A/(q_A+q_B), type = "l")
-
+plot(len_list, q_A/(q_A+q_B), type = "l", ylim = c(0,1))
 plot(len_list, rho, type = "l")
-
+dev.off()
 
 # ----- Catch at Length -----#
 
@@ -106,8 +105,8 @@ N <- N_A + N_B
 # plot
 
 jpeg(paste(sep = "-","res/truth_catch.jpg"),
-     res = 300, width = 8, height = 10, units = "in")
-par(mfrow = c(2,1))
+     res = 400, width = 10, height = 6, units = "in")
+par(mfrow = c(1,2))
 matplot(len_list, t(N_A), type = "l", lty = "dashed", col = "black")
 lines(len_list, colMeans(N_A), col = "orange")
 matplot(len_list, t(N_B), type = "l", col = "black")
