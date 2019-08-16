@@ -1,6 +1,6 @@
 # ###############################################
 # Simulate data for model testing
-# simplistic simulation for testing single factors
+# simplistic simulation 
 # ###############################################
 
 

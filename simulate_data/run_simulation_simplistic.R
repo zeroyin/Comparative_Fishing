@@ -391,7 +391,7 @@ fit_model <- function(i.model, simu){
 
 # load TMB model
 library(TMB)
-version <- "binom_1"
+version <- "binom"
 compile(paste0(version,".cpp"))
 dyn.load(dynlib(version))
 

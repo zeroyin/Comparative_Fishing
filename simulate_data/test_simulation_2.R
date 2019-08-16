@@ -1,6 +1,8 @@
 # ###############################################
 # Simulate data for model testing
-# infer density from survey
+# test:
+# interpolate density from survey
+# Depreciated
 # ###############################################
 
 rm(list = ls())
