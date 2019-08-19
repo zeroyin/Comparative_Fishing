@@ -1,145 +1,12 @@
-# ###############################################
-# Simulate data for model testing
-# simplistic simulation 
-# ###############################################
+# function to fit model, given model name
 
 
-rm(list = ls())
-setwd("C:/Users/yinyi/Dropbox/BIO/Comparative_Fishing/Workspace/simulate_data/")
-
-library(dplyr)
-library(tidyr)
-library(ggplot2)
-
-
-# ----- Presets -----#
-
-# strata list
-n_strat <- 20
-strat_list <- seq(1, n_strat)
-
-# station list
-n_stn <- 10
-# stn_strat <- 1 + rmultinom(1, n_station-n_strat, rep(1/n_strat,n_strat)) # random number of stations per stratum
-n_stn_strat <- rep(1, n_stn) # fixed number of stations per stratum
-stn_list <- seq(1, n_stn)
-
-# length list
-n_len <- 50
-len_list <- seq(11, 10 + n_len, length.out = n_len)
-
-
-# ----- Population Density -----#
-
-# population density same within stratum
-## use flat beta disribution
-## use spatial distribution inferred from survey
-
-dens <- rbeta(n_strat, 3,5)
-
-# plot
-hist(dens)
-
-# length composition per stratum
-## flat uniform distribution
-## simulate a smooth curve
-## use smoothed curve from survey
-
-# len_comp <- rep(1,n_len)
-# len_comp <- dbeta(len_list/70,1.8,2)
-
-len_comp <- matrix(NA, n_stn,n_len)
-for(i.stn in 1:n_stn){
-    len_comp[i.stn, ] <- dnorm(seq(-3,3,length.out = n_len),(i.stn-n_stn/2)/4, 0.4 + i.stn/10)
-}
+fit_model <- function(i.model, simu){
     
-# plot
-matplot(len_list, t(len_comp), type = "l")
-
-
-dens_mat <- dens * len_comp
-
-matplot(len_list, t(dens_mat), type = "l", col = "black")
-
-
-# ----- Gear Catchability -----#
-
-# cachability is more than gear selectivity 
-## parametric selectivity models: logistic, lognormal etc
-## designed selectivity 
-
-s_A <-  dlnorm(len_list, meanlog = log(40), sdlog = 0.3)
-# s_A <-  cos(len_list/10+20)+1
-q_A <- s_A/sum(s_A)
-
-s_B <-  dlnorm(len_list, meanlog = log(30), sdlog = 0.3)
-q_B <- s_B/sum(s_B)
-
-#  true conversion: 
-rho <- q_A/q_B
-
-# plot
-jpeg(filename = "res/catchability.jpg", width = 10, height = 8, units = "in", res = 200)
-layout(matrix(c(1,1,2,3), 2, 2, byrow = TRUE))
-matplot(len_list, cbind(q_A, q_B), type = "l", lty = c(1,2), col = "black")
-legend("topleft", lty = c(1,2), legend = c("A", "B"))
-plot(len_list, q_A/(q_A+q_B), type = "l", ylim = c(0,1))
-plot(len_list, rho, type = "l")
-dev.off()
-
-# ----- Catch at Length -----#
-
-# area for scaling catch numbers
-area <- 1000
-N_A <- N_B <- matrix(NA, n_stn, n_len)
-
-# Poisson sampling variation
-for(i.stn in 1:n_stn){
-    N_A[i.stn,] <- rpois(n = n_len, lambda = q_A*dens_mat[i.stn,]*area*rlnorm(1,-0.18,0.6))
-    N_B[i.stn,] <- rpois(n = n_len, lambda = q_B*dens_mat[i.stn,]*area*rlnorm(1,-0.18,0.6))
-}
-
-# combined catch 
-N <- N_A + N_B
-
-
-# plot
-
-jpeg(paste(sep = "-","res/truth_catch.jpg"),
-     res = 400, width = 10, height = 6, units = "in")
-par(mfrow = c(1,2))
-matplot(len_list, t(N_A), type = "l", lty = "dashed", col = "black")
-lines(len_list, colMeans(N_A), col = "orange")
-matplot(len_list, t(N_B), type = "l", col = "black")
-lines(len_list, colMeans(N_B), col = "orange")
-dev.off()
-
-jpeg(paste(sep = "-","res/truth_mu.jpg"),
-     res = 300, width = 8, height = 6, units = "in")
-matplot(len_list, t(N_A/N), type = "p", cex = 0.2, col = "black")
-lines(len_list, colMeans(N_A/N, na.rm = T), col = "orange")
-lines(len_list, boot::inv.logit(log(rho)), col = "black")
-legend("bottomright", pch = c(1,NA,NA), lty = c(0,1,1), col = c("black","orange","black"), c("mu by stn", "mean obs mu", "true mu"))    
-dev.off()
-
-
-
-# ########################################
-# Fit models
-# ########################################
-
-
-
-# load TMB model
-library(TMB)
-version <- "binom_1"
-compile(paste0(version,".cpp"))
-dyn.load(dynlib(version))
-
-
-
-# function to fit tmb model, given species and model name
-fit_model <- function(i.model, N_A, N_B, lenseq){
+    # attach data to environment
+    N_A <- simu$N_A
+    N_B <- simu$N_B
+    len_list <- simu$len_list
     
     # model related: nll index and df index
     ind_nll<- 1 + switch(
@@ -155,6 +22,7 @@ fit_model <- function(i.model, N_A, N_B, lenseq){
         "BB0"=2,"BB1"=3,"BB2"=4,"BB3"=6,"BB4"=5,"BB5"=7,"BB6"=8,"BB7"=10
     )
     
+    # total catch
     N <- N_A + N_B
     
     # basis and penalty matrices for cubic spline: default to 10 knots
@@ -162,7 +30,6 @@ fit_model <- function(i.model, N_A, N_B, lenseq){
     cs <- smooth.construct(
         object = s(len, bs = "cr"),
         data = cbind(len = seq(1, 70, 1), catch = 2) %>% as.data.frame(),
-        # data = cbind(len = len_list, catch = colSums(N)) %>% as.data.frame(),
         knots = data.frame(knots = len_list)
     )
     
@@ -182,7 +49,7 @@ fit_model <- function(i.model, N_A, N_B, lenseq){
         d = eigende$value[1:n_r],
         idist = switch(substr(i.model, 1, 2), "BI"=0, "BB"=1, "ZB"=2)
     )
-
+    
     parameters = list(
         beta = rep(0, n_f),
         b = rep(0, n_r),
@@ -191,7 +58,7 @@ fit_model <- function(i.model, N_A, N_B, lenseq){
         g = rep(0, n_r),
         log_s_g = log(10),
         delta = matrix(0, nstation, n_f),
-        chol_delta = c(1,1,1), # use chol decomp in vector form
+        chol_delta = c(1,1,1), 
         epsilon = matrix(0, nstation, n_r),
         log_s_epsilon = log(10),
         beta_0 = 0,
@@ -203,7 +70,7 @@ fit_model <- function(i.model, N_A, N_B, lenseq){
         log_p_s2 = log(2)
     )
     
-    # model specifications
+    # model specifications: mapping
     if(i.model == "BB7"){
         map = list(
             beta_0 = factor(NA),
@@ -428,74 +295,29 @@ fit_model <- function(i.model, N_A, N_B, lenseq){
         )
     }
     
-    
+    # run model
+    library(TMB)
     obj = MakeADFun(data=data,
                     parameters=parameters,
                     map = map,
-                    DLL=version,
+                    DLL="binom",
                     random = c("b", "g", "delta", "epsilon", "delta_0", "p"),
                     silent = T)
-    opt <- nlminb(obj$par,obj$fn,obj$gr)
+    opt <- try(nlminb(obj$par,obj$fn,obj$gr))
     
     # check convergence, maximum gradient and positive definite
-    if(exists("opt")&!opt$convergence){
-        gra <- obj$gr()
-        hes <- eigen(optimHess(par=opt$par, fn=obj$fn, gr=obj$gr))$values
-        if(max(abs(gra)) < 0.1 & min(hes) > -0.1){
-            aic <- 2*sum(obj$report()$nll[ind_nll]) + 2*ind_df
-            rep <- try(sdreport(obj))
-            res <- list(obj = obj, opt = opt, rep = rep, aic = aic, gra = gra, hes = hes)
-            save(res, file = paste0("res/", i.model,".rda"))
-            
-            # estimate and std of mu and phi and rho
-            est <- summary(rep, "report")[,"Estimate"]
-            std <-  summary(rep, "report")[,"Std. Error"]
-            est.mean_mu <- est[names(est) == "mean_mu"]
-            std.mean_mu <- std[names(std) == "mean_mu"]
-            
-            jpeg(paste(sep = "-","res/estimates",i.model,"CI95_zscore.jpg"),
-                 res = 300, width = 8, height = 6, units = "in")
-            plot(lenseq, est.mean_mu, ylim = c(0,1), type = "l", col = "orange")
-            lines(lenseq, boot::inv.logit(log(rho)), col = "black")
-            for(i in 1:nstation){lines(lenseq, obj$report()$mu[i,], col = "gray")}
-            lines(lenseq, est.mean_mu + 1.96*std.mean_mu, col = "blue", lty = "dashed")
-            lines(lenseq, est.mean_mu - 1.96*std.mean_mu, col = "blue", lty = "dashed")
-            dev.off()
-            
-            return(res)
-        }
-    }
+    if(exists("opt")){
+        if(!inherits(opt, "try-error")){
+            # if(!opt$convergence){
+            gra <- obj$gr()
+            if(max(abs(gra)) < 0.1){
+                hes <- eigen(optimHess(par=opt$par, fn=obj$fn, gr=obj$gr))$values
+                if(min(hes > 0)){
+                    aic <- 2*sum(obj$report()$nll[ind_nll]) + 2*ind_df
+                    if(aic < 10^10){
+                        # rep <- try(sdreport(obj))
+                        res <- list(obj = obj, opt = opt, aic = aic)
+                        return(res)
+                    }}}}}
 }
-
-
-
-# ---------------------------------------------------------
-# run a suite of models given species and model name
-# ---------------------------------------------------------
-
-# Note : false convergence filtering is removed
-
-model_vec <- c(paste0("BB", 0:7),paste0("BI", 0:4),paste0("ZB", 2:3), "GB")
-for(i.model in model_vec){
-        res <- fit_model(i.model, N_A = N_A, N_B = N_B, lenseq = len_list)
-}
-
-
-# AIC table
-model_vec <- c(paste0("BB", 0:7),paste0("BI", 0:4),paste0("ZB", 2:3))
-aic_mat <- rep(NA, length(model_vec))
-names(aic_mat) <- model_vec
-for(i_model in 1:length(model_vec)){
-    res_file <- paste0("res/output/res-",model_vec[i_model],".rda")
-    if(file.exists(res_file)){
-        load(res_file)
-        aic_mat[i_model] <- res$aic
-        rm("res", "res_file")
-    }
-}
-
-t(round(aic_mat, digits = 0)) %>%
-    write.csv(file = "res/aic_table.csv")
-
-
 
