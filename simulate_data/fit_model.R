@@ -8,6 +8,15 @@ fit_model <- function(i.model, simu){
     N_B <- simu$N_B
     len_list <- simu$len_list
     
+    # # remove trivial stations and trivial length
+    i <- rowSums(N_A+N_B)>0
+    # j <- colSums(N_A+N_B)>0
+    # 
+    N_A <- N_A[i,]
+    N_B <- N_B[i,]
+    # len_list <- len_list[j]
+    
+    
     # model related: nll index and df index
     ind_nll<- 1 + switch(
         i.model,
@@ -29,7 +38,7 @@ fit_model <- function(i.model, simu){
     library(mgcv)
     cs <- smooth.construct(
         object = s(len, bs = "cr"),
-        data = cbind(len = seq(1, 70, 1), catch = 2) %>% as.data.frame(),
+        data = cbind(len = seq(min(len_list)-5, max(len_list)+5, 1), catch = 2) %>% as.data.frame(),
         knots = data.frame(knots = len_list)
     )
     
@@ -312,7 +321,7 @@ fit_model <- function(i.model, simu){
             gra <- obj$gr()
             if(max(abs(gra)) < 0.1){
                 hes <- eigen(optimHess(par=opt$par, fn=obj$fn, gr=obj$gr))$values
-                if(min(hes > 0)){
+                if(min(hes) > 0){
                     aic <- 2*sum(obj$report()$nll[ind_nll]) + 2*ind_df
                     if(aic < 10^10){
                         # rep <- try(sdreport(obj))
