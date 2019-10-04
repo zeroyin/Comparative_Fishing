@@ -4,7 +4,7 @@
 # #######################################
 
 rm(list = ls())
-setwd("C:/Users/yinyi/Dropbox/BIO/Comparative_Fishing/Workspace/test_size_gam/")
+setwd("C:/Users/yinyi/Dropbox/BIO/Comparative_Fishing/Workspace/read_data/")
 
 library(dplyr)
 library(tidyr)
@@ -121,18 +121,30 @@ ggsave(filename = paste0("data_description/NED2013/paired_catch-species_",i.spec
        plot = p, width = 8, height = 6)
 
 
-# paired catch by station: length spectrum
-p <- d.length %>%
-    filter(species == i.species) %>%
-    ggplot() +
-    geom_tile(aes(as.factor(station), len, fill = catch)) +
-    scale_fill_continuous(low = "white", high = "red", trans = "log10", na.value = "white") +
-    facet_wrap(~gear, nrow = 2) +
-    theme_bw() +
-    theme(axis.text.x = element_text(angle = 90)) +
-    ylim(c(0,60))
-ggsave(filename = paste0("data_description/NED2013/paired_catch_spectrum-species_",i.species,".pdf"),
-       plot = p, width = 15, height = 10)
 
+# paired catch by station: length spectrum
+
+for (i.species in c(10,11,14,23,201,204)){
+    p <- d.length %>%
+        filter(species == i.species) %>%
+        filter(catch > 0) %>%
+        ggplot() +
+        geom_tile(aes(as.factor(station), len, fill = catch)) +
+        scale_fill_continuous(low = "white", high = "red", trans = "log10", na.value = "white",limits = c(0.1, NA)) +
+        facet_wrap(~gear, ncol = 2) +
+        theme_bw() +
+        theme(axis.text.x = element_blank(),
+              axis.title = element_blank(),
+              legend.position = "bottom",
+              panel.border = element_rect(fill = NA),
+              panel.background = element_blank(),
+              panel.grid= element_blank()) 
+    ggsave(filename = paste0("data_description/NED2013/paired-catch-spectrum-species-",i.species,".jpg"),
+           plot = p, width = 12,height = 6)
+    
+}
+
+
+d.length %>% filter(species == 11) %>% spread(gear, catch) %>% mutate(r = `9`/`15`)
 
 

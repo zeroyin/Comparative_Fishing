@@ -210,6 +210,11 @@ d.length %>%
     count(species, name) %>%
     print(n=Inf)
 
+d.length %>%
+    filter(species %in% c(10,11,14,23,201,204)) %>%
+    group_by(species) %>%
+    summarize(n = n_distinct(station))
+
 
 # figure: catch by length by species
 p <- d.length %>% 
@@ -274,18 +279,29 @@ ggsave(filename = paste0("data_description/NED2005/paired_catch-species_",i.spec
        plot = p, width = 8, height = 6)
 
 
-# paired catch by station: length spectrum
-p <- d.length %>%
-    filter(species == i.species) %>%
-    ggplot() +
-    geom_tile(aes(as.factor(station), len, fill = catch)) +
-    scale_fill_continuous(low = "gray", high = "black", na.value = "white", trans = "log10") +
-    facet_wrap(~vessel, nrow = 2) +
-    theme_bw() +
-    theme(axis.text.x = element_text(angle = 90))
-ggsave(filename = paste0("data_description/NED2005/paired_catch_spectrum-species_",i.species,".pdf"),
-       plot = p, width = 15, height = 10)
 
+
+# paired catch by station: length spectrum
+
+for (i.species in c(10,11,14,23,201,204)){
+    p <- d.length %>%
+        filter(species == i.species) %>%
+        filter(catch > 0) %>%
+        ggplot() +
+        geom_tile(aes(as.factor(station), len, fill = catch)) +
+        scale_fill_continuous(low = "white", high = "red", trans = "log10", na.value = "white",limits = c(0.1, NA)) +
+        facet_wrap(~vessel, ncol = 2) +
+        theme_bw() +
+        theme(axis.text.x = element_blank(),
+              axis.title = element_blank(),
+              legend.position = "bottom",
+              panel.border = element_rect(fill = NA),
+              panel.background = element_blank(),
+              panel.grid= element_blank()) 
+    ggsave(filename = paste0("data_description/NED2005/paired-catch-spectrum-species-",i.species,".jpg"),
+           plot = p, width = 12,height = 6)
+    
+}
 
 
 # -----------------------------------------------
@@ -295,7 +311,7 @@ ggsave(filename = paste0("data_description/NED2005/paired_catch_spectrum-species
 
 d.length %>%
     ggplot(aes(x = strat, y = depth)) +
-    geom_boxplot(width = 0.5, fill = "white", ) +
+    geom_boxplot(width = 0.5, fill = "white") +
     geom_jitter(aes(color = vessel), width = 0.1, size = 0.1) +
     theme_bw()
 

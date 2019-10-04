@@ -6,7 +6,7 @@
 
 
 rm(list = ls())
-setwd("C:/Users/yinyi/Dropbox/BIO/Comparative_Fishing/Workspace/length_binom_models/")
+setwd("C://Users/yinyi/Dropbox/BIO/Comparative_Fishing/Workspace/length_binom_models/")
 
 library(dplyr)
 library(tidyr)
@@ -79,8 +79,8 @@ fit_model <- function(i.model, i.species, b.len = 1, d.length){
     nlen = length(lenseq)
     nstation = nlevels(d$station)
     data = list(
-        A = d %>% filter(vessel == "NED") %>% spread(len, catch) %>% select(-station, -vessel) %>% as.matrix(),
-        B = d %>% filter(vessel == "TEL") %>% spread(len, catch) %>% select(-station, -vessel) %>% as.matrix(),
+        A = d %>% filter(vessel == levels(d$vessel)[1]) %>% spread(len, catch) %>% select(-station, -vessel) %>% as.matrix(),
+        B = d %>% filter(vessel == levels(d$vessel)[2]) %>% spread(len, catch) %>% select(-station, -vessel) %>% as.matrix(),
         offset = outer(d.offset$offset,rep(1,length(lenseq))),
         Xf = cs$X %*% eigende$vectors[,1:n_f+n_r],
         Xr = cs$X %*% eigende$vectors[,1:n_r],
@@ -331,7 +331,8 @@ fit_model <- function(i.model, i.species, b.len = 1, d.length){
             log_sigma_delta_0 = factor(NA)
         )
     }
-    
+
+        
     obj = MakeADFun(data=data,
                     parameters=parameters,
                     map = map,
@@ -345,7 +346,7 @@ fit_model <- function(i.model, i.species, b.len = 1, d.length){
         if(!opt$convergence){
             gra <- obj$gr()
             hes <- eigen(optimHess(par=opt$par, fn=obj$fn, gr=obj$gr))$values
-            if(max(abs(gra)) < 0.1 & min(hes) > -0.1){
+            if(max(abs(gra)) < 0.1 & min(hes) > 0){
                 aic <- 2*sum(obj$report()$nll[ind_nll]) + 2*ind_df
                 rep <- try(sdreport(obj))
                 res <- list(obj = obj, opt = opt, rep = rep, aic = aic, gra = gra, hes = hes)
@@ -400,11 +401,11 @@ for(i.model in model_vec){
 
 # AIC table
 species_vec <- c(10, 11, 23, 14, 201, 204)
-model_vec <- c(paste0("BB", 0:7),paste0("BI", 0:4), paste0("ZB", 2:3), "GB")
+model_vec <- c(paste0("BB", 0:7),paste0("BI", 0:4))#, paste0("ZB", 2:3), "GB")
 aic_mat <- matrix(NA, length(species_vec), length(model_vec), dimnames = list(species_vec, model_vec))
 for(i.species in 1:length(species_vec)){
     for(i.model in 1:length(model_vec)){
-        res_file <- paste0("NED2005/", species_vec[i.species], "-",model_vec[i.model],".rda")
+        res_file <- paste0("res/", species_vec[i.species], "-",model_vec[i.model],".rda")
         if(file.exists(res_file)){
             load(res_file)
             aic_mat[i.species, i.model] <- res$aic
@@ -414,7 +415,7 @@ for(i.species in 1:length(species_vec)){
 }
 
 t(round(aic_mat - apply(aic_mat, MARGIN = 1, FUN = function(x) min(x, na.rm = T)), digits = 0)) %>%
-    write.csv(file = "aic_table.csv")
+    write.csv(file = "res/aic_table.csv")
 
 
 t(aic_mat)
