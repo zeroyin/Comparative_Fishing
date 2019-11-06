@@ -35,6 +35,7 @@ data.set <- map_df(sheet.set, ~ read_excel(
               setno = as.integer(SETNO),
               strat = as.character(STRAT),
               depth = DMIN, # depth
+              dist = DIST,
               lon = - (floor(SLONG/100) + SLONG%%100/60), 
               lat = floor(SLAT/100) + SLAT%%100/60) %>%
     mutate(vessel = as.factor(substr(mission, 1, 3)))
@@ -167,7 +168,7 @@ base_map +
 ggsave(filename = "data_description/NED2005/paired_NED2005_map.jpg", width = 12, height = 8, dpi = 600)
 
 
-# check distanceL: one pair are 4km apart
+# check distance: one pair are 4km apart
 x <- bind_rows(data.set.p1, data.set.p2)
 
 y <- x %>% 
@@ -284,7 +285,7 @@ ggsave(filename = paste0("data_description/NED2005/paired_catch-species_",i.spec
 # paired catch by station: length spectrum
 
 for (i.species in c(10,11,14,23,201,204)){
-    p <- d.length %>%
+    p <- d.length %>% 
         filter(species == i.species) %>%
         filter(catch > 0) %>%
         ggplot() +
