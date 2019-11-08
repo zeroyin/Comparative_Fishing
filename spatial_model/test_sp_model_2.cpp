@@ -52,7 +52,8 @@ Type objective_function<Type>::operator() (){
     PARAMETER(log_tau_s);
     PARAMETER(log_kappa_st);
     PARAMETER(log_tau_st);
-    PARAMETER_VECTOR(log_nbk);
+    PARAMETER(log_nbk);
+    // PARAMETER_VECTOR(log_nbk);
     PARAMETER_VECTOR(log_zip);
     PARAMETER(log_phi);
 
@@ -94,12 +95,13 @@ Type objective_function<Type>::operator() (){
 		Type mu_site = 0;
 		Type catch_site = 0;
 		Type nbk_site = 0;
-		// Type zip_site = 0;
+		Type zip_site = 0;
 		for(int i = 0; i < nobs; i++){
 			if(i_site == site(i)){
 				mu_site += mu(i);
 				catch_site += C(i);
-				nbk_site = exp(log_nbk); // exp(log_nbk(survey(i)));
+				nbk_site = exp(log_nbk); 
+				// nbk_site = exp(log_nbk(survey(i)));
 				zip_site = exp(log_zip(survey(i)));
 			}
 		}
@@ -136,6 +138,7 @@ Type objective_function<Type>::operator() (){
 	REPORT(log_S);
 	REPORT(log_ST);
 	REPORT(nll);
+	REPORT(log_zip);
 
 
 

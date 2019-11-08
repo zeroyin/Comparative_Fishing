@@ -159,6 +159,7 @@ exp(opt$par)
 
 
 res <- d %>% mutate(
+  catch = LobCatch,
   mu = obj$report()$mu,
   resid = d$LobCatch - obj$report()$mu,
   log_resid = log(abs(resid))*sign(resid)
@@ -178,6 +179,7 @@ ggplot(res) +
   facet_grid(vessel~year, scales = "free_y") +
   theme_bw() +
   geom_abline(intercept = 0, slope = 0, color = "gray")
+# ggsave(filename = "resid.jpg", width = 12, height = 15, units = "in")
 
 
 basemap +
