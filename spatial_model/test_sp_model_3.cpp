@@ -1,3 +1,5 @@
+// Spatial model, basic version +
+// Options(0)==2: AR(1) for ST effect
 
 #include <TMB.hpp>
 
@@ -44,13 +46,13 @@ Type objective_function<Type>::operator() (){
 	PARAMETER_VECTOR(log_rho); // relative catchability
 	PARAMETER_VECTOR(log_N); // total abundance by year
  	PARAMETER_VECTOR(log_S); // spatial effect
- 	PARAMETER_MATRIX(log_ST); // spatiotemporal effect 
+ 	PARAMETER_ARRAY(log_ST); // spatiotemporal effect 
     PARAMETER(log_kappa_s);
     PARAMETER(log_tau_s);
     PARAMETER(log_kappa_st);
     PARAMETER(log_tau_st);
+    PARAMETER(beta);
     PARAMETER(log_nbk);
-    PARAMETER_VECTOR(log_zip);
     PARAMETER(log_phi);
 
 
@@ -59,7 +61,6 @@ Type objective_function<Type>::operator() (){
     // Joint negative log-likelihood
     vector<Type> nll(5); nll.setZero();
     
-
 	// process equation
     vector<Type> mu(nobs); mu.setZero();
     for(int i = 0; i < nobs; i++){
@@ -84,26 +85,23 @@ Type objective_function<Type>::operator() (){
     	for(int i_year = 1; i_year < nyear; i_year++){
     		nll(1) += SCALE(GMRF(Q_st), 1/exp(log_tau_st))(vector<Type>(log_ST.col(i_year)-log_ST.col(i_year-1)));
     	}
+    }else if(Options(0) == 2){
+    	nll(1) += SEPARABLE(AR1(beta), SCALE(GMRF(Q_st), 1/exp(log_tau_st)))(log_ST);
     }
 
 	// among site: negative binomial for catch
 	for(int i_site = 0; i_site < nsite; i_site++){
 		Type mu_site = 0;
 		Type catch_site = 0;
-		Type zip_site = 0;
+		// Type zip_site = 0;
 		for(int i = 0; i < nobs; i++){
 			if(i_site == site(i)){
 				mu_site += mu(i);
 				catch_site += C(i);
-				zip_site = exp(log_zip(survey(i)));
 			}
 		}
 		// combined mu and combined catch for each site
-		if(Options(1) == 0){
-			nll(2) -= dnbinom2(catch_site, mu_site, mu_site+mu_site*mu_site/exp(log_nbk), true);
-		}else if(Options(1) == 1){
-			nll(2) -= dzinbinom2(catch_site, mu_site, mu_site+mu_site*mu_site/exp(log_nbk), zip_site, true);
-		}
+		nll(2) -= dnbinom2(catch_site, mu_site, mu_site+mu_site*mu_site/exp(log_nbk), true);
 	}
 
 
@@ -112,11 +110,7 @@ Type objective_function<Type>::operator() (){
 		for(int i = 0; i < nobs; i++){
 			if((site(j) == site(i)) & (vessel(j) < vessel(i))){
 				// expected catch proportion for each pair
-				if(Options(2) == 0){
-					nll(3) -= dbinom(C(j), C(i)+C(j), mu(j)/(mu(i)+mu(j)), true);
-				}else if(Options(2) == 1){
-					nll(3) -= dbetabinom(C(j), C(i)+C(j), mu(j)/(mu(i)+mu(j)), exp(log_phi), true);
-				}
+				nll(3) -= dbetabinom(C(j), C(i)+C(j), mu(j)/(mu(i)+mu(j)), exp(log_phi), true);
 			}
 		}
 	}

@@ -59,7 +59,7 @@ d.pair <- data.frame(
 # Organize survey data 
 d <- data.survey %>% 
   filter(!is.na(knotno)) %>% # within the study area
-  filter(year >= 2015 & year <=2018) %>% # select years 
+  filter(year >= 2014 & year <=2018) %>% # select years 
   mutate(date = as.character(date)) %>% # change date data type
   filter(lubridate::month(date) %in% c(6,7,8)) %>% # select summer surveys
   left_join(d.pair, by = "EID") %>% # identify paired sets
@@ -117,7 +117,7 @@ tmb.data = list(
   offset = log(d$AreaSwept), # offset for tow standardization
   C = d$LobCatch, # catch number
   spde = spde$param.inla[c("M0","M1","M2")], # spatial struct
-  Options = c(1,1,1) # model options
+  Options = c(2) # model options
 )
 
 tmb.param = list(
@@ -125,41 +125,44 @@ tmb.param = list(
   log_N = rep(1, tmb.data$nyear), # total abundance by year
   log_S = rep(0, mesh$n), # spatial effect
   log_ST = matrix(0, nrow = mesh$n, ncol = tmb.data$nyear), # spatiotemporal effect 
-  log_kappa_s = 0, # range 
-  log_tau_s = 0,  # variance
-  log_kappa_st = 0, # range 
-  log_tau_st = 0, # variance
-  log_nbk = 10, # NB over-dispersion parameter
-  log_zip = c(-10,-10,-10,-10, -1), # NB zero-inlfation probability for each survey
+  log_kappa_s = 0, # range for S
+  log_tau_s = 0,  # variance for S
+  log_kappa_st = 0, # range for ST
+  log_tau_st = 0, # variance for ST
+  beta = 0, # temporal correlation for ST
+  log_nbk = 0, # NB over-dispersion parameter
   log_phi = 0 # BB over-dispersion parameter
 )
 
 tmb.map <- NULL
 
 
-dyn.unload("spatialmodel")
-compile("spatialmodel.cpp")
-dyn.load("spatialmodel")
+dyn.unload("test_sp_model_3")
+compile("test_sp_model_3.cpp")
+dyn.load("test_sp_model_3")
 
 obj <- MakeADFun(
   tmb.data, tmb.param, tmb.map,
   random = c("log_S", "log_ST"),
-  DLL = "spatialmodel",
+  DLL = "test_sp_model_3",
   inner.control = list(trace = FALSE)
 )
 
 system.time(
-  opt<-nlminb(obj$par,obj$fn,obj$gr, control = list(iter.max=1000,eval.max=1000))
+  opt<-nlminb(obj$par,obj$fn,obj$gr)
 ) 
+
 
 exp(obj$report()$log_rho)
 
+exp(opt$par)
 
-res <- data.frame(year = d$year,
-                  vessel = d$vessel, 
-                  catch = d$LobCatch,
-                  mu = obj$report()$mu,
-                  resid = d$LobCatch - obj$report()$mu)
+
+res <- d %>% mutate(
+  mu = obj$report()$mu,
+  resid = d$LobCatch - obj$report()$mu,
+  log_resid = log(abs(resid))*sign(resid)
+)
 
 ggplot(res) +
   geom_point(aes(catch, mu), color = "blue", size = 0.2) +
@@ -171,9 +174,19 @@ ggplot(res) +
 
 
 ggplot(res) +
-  geom_point(aes(mu, resid), color = "blue", size = 0.2) +
+  geom_point(aes(log(mu), resid), color = "blue", size = 0.2) +
   facet_grid(vessel~year, scales = "free_y") +
-  scale_x_log10() + 
   theme_bw() +
   geom_abline(intercept = 0, slope = 0, color = "gray")
+
+
+basemap +
+  geom_point(data = res, aes(X,Y,color = log_resid), size = 0.5) +
+  facet_grid(vessel~year) +
+  scale_color_gradient2(low = "blue", mid = "white", midpoint = 0, high = "red", na.value = "white") +
+  theme_bw()
+ggsave(filename = "resid_map.jpg", width = 12, height = 15, units = "in")
+
+
+
 
