@@ -1,0 +1,13 @@
+n=500
+CapeRosewayBalloon    CapeRosewayNest    JosiesPrideNest            Needler 
+         1.0000000          3.0547714          1.8385991          0.8708587 
+n=250
+CapeRosewayBalloon    CapeRosewayNest    JosiesPrideNest            Needler 
+         1.0000000          3.0451455          1.8933333          0.9146995 
+n=100
+CapeRosewayBalloon    CapeRosewayNest    JosiesPrideNest            Needler 
+         1.0000000          2.9681315          1.5169304          0.5823162 
+
+n=regular
+CapeRosewayBalloon    CapeRosewayNest    JosiesPrideNest            Needler 
+         1.0000000          3.2388282          1.7798276          0.7015654 

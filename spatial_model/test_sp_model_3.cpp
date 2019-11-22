@@ -1,6 +1,7 @@
 // Spatial model, basic version +
+// Options for temporal dependence of ST effect:
 // Options(0)==2: AR(1) for ST effect
-
+// Depth included as covariate
 #include <TMB.hpp>
 
 
